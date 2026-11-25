@@ -12,12 +12,6 @@
  *  get it wrong and it may eventually want to migrate.
  */
 
-var { MailServices } = ChromeUtils.importESModule(
-  "resource:///modules/MailServices.sys.mjs"
-);
-var { TagUtils } = ChromeUtils.importESModule(
-  "resource:///modules/TagUtils.sys.mjs"
-);
 var { Gloda } = ChromeUtils.importESModule(
   "resource:///modules/gloda/GlodaPublic.sys.mjs"
 );
@@ -27,12 +21,8 @@ var { GlodaConstants } = ChromeUtils.importESModule(
 var { GlodaSyntheticView } = ChromeUtils.importESModule(
   "resource:///modules/gloda/GlodaSyntheticView.sys.mjs"
 );
-var { FacetDriver, FacetUtils } = ChromeUtils.importESModule(
+var { FacetDriver } = ChromeUtils.importESModule(
   "resource:///modules/gloda/Facet.sys.mjs"
-);
-
-var glodaFacetStrings = Services.strings.createBundle(
-  "chrome://messenger/locale/glodaFacetView.properties"
 );
 
 /**
@@ -45,92 +35,32 @@ const QueryExplanation = {
   /**
    * Indicate that we are based on a fulltext search
    */
-  setFulltext(aMsgSearcher) {
-    while (this.node.hasChildNodes()) {
-      this.node.lastChild.remove();
-    }
-
-    const spanify = (text, classNames) => {
-      const span = document.createElement("span");
-      span.setAttribute("class", classNames);
-      span.textContent = text;
-      this.node.appendChild(span);
-      return span;
-    };
-
-    const searchLabel = glodaFacetStrings.GetStringFromName(
-      "glodaFacetView.search.label2"
-    );
-    spanify(searchLabel, "explanation-fulltext-label");
-
-    const criteriaText = glodaFacetStrings.GetStringFromName(
-      "glodaFacetView.constraints.query.fulltext." +
-        (aMsgSearcher.andTerms ? "and" : "or") +
-        "JoinWord"
-    );
-    for (const [iTerm, term] of aMsgSearcher.fulltextTerms.entries()) {
-      if (iTerm) {
-        spanify(criteriaText, "explanation-fulltext-criteria");
-      }
-      spanify(term, "explanation-fulltext-term");
+  setFulltext(searcher) {
+    this.node.textContent = searcher.searchString;
+    document.getElementById("edit-search").hidden = !searcher.searchString;
+    if (!searcher.searchString) {
+      document.l10n.setAttributes(this.node, "search-results-title");
     }
   },
-  setQuery(msgQuery) {
-    try {
-      while (this.node.hasChildNodes()) {
-        this.node.lastChild.remove();
+
+  setQuery(query) {
+    const labels = [];
+    for (const [kind, attribute, value] of query?._constraints ?? []) {
+      if (kind != 1) {
+        continue;
       }
-
-      const spanify = (text, classNames) => {
-        const span = document.createElement("span");
-        span.setAttribute("class", classNames);
-        span.textContent = text;
-        this.node.appendChild(span);
-        return span;
-      };
-
-      let label = glodaFacetStrings.GetStringFromName(
-        "glodaFacetView.search.label2"
-      );
-      spanify(label, "explanation-query-label");
-
-      const constraintStrings = [];
-      for (const constraint of msgQuery._constraints) {
-        if (constraint[0] != 1) {
-          // No idea what this is about.
-          return;
-        }
-        if (constraint[1].attributeName == "involves") {
-          let involvesLabel = glodaFacetStrings.GetStringFromName(
-            "glodaFacetView.constraints.query.involves.label"
-          );
-          involvesLabel = involvesLabel.replace("#1", constraint[2].value);
-          spanify(involvesLabel, "explanation-query-involves");
-        } else if (constraint[1].attributeName == "tag") {
-          const tagLabel = glodaFacetStrings.GetStringFromName(
-            "glodaFacetView.constraints.query.tagged.label"
-          );
-          const tag = constraint[2];
-          const tagNode = document.createElement("span");
-          const color = MailServices.tags.getColorForKey(tag.key);
-          tagNode.setAttribute("class", "message-tag");
-          if (color) {
-            const textColor = !TagUtils.isColorContrastEnough(color)
-              ? "white"
-              : "black";
-            tagNode.setAttribute(
-              "style",
-              "color: " + textColor + "; background-color: " + color + ";"
-            );
-          }
-          tagNode.textContent = tag.tag;
-          spanify(tagLabel, "explanation-query-tagged");
-          this.node.appendChild(tagNode);
-        }
+      if (attribute.attributeName == "involves") {
+        labels.push(value.contact?.name || value.value);
+      } else if (attribute.attributeName == "tag") {
+        labels.push(value.tag);
       }
-      label = label + constraintStrings.join(", "); // XXX l10n?
-    } catch (e) {
-      console.error(e);
+    }
+    if (labels.length) {
+      this.node.textContent = new Intl.ListFormat(
+        Services.locale.appLocaleAsBCP47
+      ).format(labels);
+    } else {
+      document.l10n.setAttributes(this.node, "search-results-title");
     }
   },
 };
@@ -452,11 +382,17 @@ ActiveNonSingularConstraint.prototype = {
     );
   },
   isIncludedGroup(aGroupValue) {
-    const valId = aGroupValue[this.facetDef.groupIdAttr];
+    const valId =
+      aGroupValue != null && !this.attrDef.objectNounDef.isPrimitive
+        ? aGroupValue[this.facetDef.groupIdAttr]
+        : aGroupValue;
     return valId in this.includedGroupIds;
   },
   isExcludedGroup(aGroupValue) {
-    const valId = aGroupValue[this.facetDef.groupIdAttr];
+    const valId =
+      aGroupValue != null && !this.attrDef.objectNounDef.isPrimitive
+        ? aGroupValue[this.facetDef.groupIdAttr]
+        : aGroupValue;
     return valId in this.excludedGroupIds;
   },
 };
@@ -536,11 +472,6 @@ var FacetContext = {
   },
 
   initialBuild() {
-    if (this.searcher) {
-      QueryExplanation.setFulltext(this.searcher);
-    } else {
-      QueryExplanation.setQuery(this.collection.query);
-    }
     // we like to sort them so should clone the list
     this.faceters = this.facetDriver.faceters.concat();
 
@@ -559,6 +490,16 @@ var FacetContext = {
     this.fullSet = this._removeDupes(this._collection.items.concat());
     if ("IMCollection" in this) {
       this.fullSet = this.fullSet.concat(this.IMCollection.items);
+    }
+    document.getElementById("sortby").value = this._sortBy;
+    const yearSelect = document.getElementById("date-range");
+    const locale = Services.locale.appLocaleAsBCP47;
+    const years = new Set(this.fullSet.map(item => item.date.getFullYear()));
+    for (const year of Array.from(years).sort((a, b) => b - a)) {
+      const option = document.createElement("option");
+      option.value = year;
+      option.textContent = year.toLocaleString(locale, { useGrouping: false });
+      yearSelect.insertBefore(option, document.getElementById("date-custom"));
     }
     this.build(this.fullSet);
   },
@@ -596,6 +537,7 @@ var FacetContext = {
    * @param {Function} aCallback - The callback to invoke when faceting is completed.
    */
   build(aNewSet, aCallback) {
+    this._numPages = 1;
     this._activeSet = aNewSet;
     this._callbackOnFacetComplete = aCallback;
     this.facetDriver.go(this._activeSet, this.facetingCompleted, this);
@@ -656,7 +598,9 @@ var FacetContext = {
             explicitBinding.getAttribute("type").includes("boolean")
           ) {
             try {
-              explicitBinding.build(true);
+              if (faceter.type != "date") {
+                explicitBinding.build(true);
+              }
             } catch (e) {
               console.error(e);
             }
@@ -703,15 +647,15 @@ var FacetContext = {
         } else {
           // otherwise, update
           faceter.xblNode.orderedGroups = faceter.orderedGroups;
-          faceter.xblNode.build(false);
+          if (faceter.type != "date") {
+            faceter.xblNode.build(false);
+          }
           faceter.xblNode.removeAttribute("style");
         }
       }
     }
 
-    if (!this._timelineShown) {
-      this._hideTimeline(true);
-    }
+    this.updateTimeline();
 
     this._showResults();
 
@@ -722,93 +666,163 @@ var FacetContext = {
     }
   },
 
-  _showResults() {
+  _showResults(appendFrom = 0) {
     const results = document.getElementById("results");
-    const numMessageToShow = Math.min(
-      this.maxMessagesToShow * this._numPages,
-      this._activeSet.length
-    );
-    results.setMessages(this._activeSet.slice(0, numMessageToShow));
+    const total = this.activeSet.length;
+    const shown = Math.min(this.maxMessagesToShow * this._numPages, total);
+    results.setMessages(this.activeSet.slice(0, shown), appendFrom);
 
-    const showLoading = document.getElementById("showLoading");
-    showLoading.style.display = "none"; // Hide spinner, we're done thinking.
-
-    const showEmpty = document.getElementById("showEmpty");
-    const showAll = document.getElementById("gloda-showall");
-    // Check for no messages at all.
-    if (this._activeSet.length == 0) {
-      showEmpty.style.display = "block";
-      showAll.style.display = "none";
+    const count = document.getElementById("result-count");
+    const filterCount = Object.keys(this._activeConstraints).length;
+    const limitReached = (searcher, collection) => {
+      const limit = searcher?.query?._limit;
+      return limit > 0 && collection.items.length >= limit;
+    };
+    const capped =
+      limitReached(this.searcher, this.collection) ||
+      limitReached(this.IMSearcher, this.IMCollection);
+    if (capped) {
+      let label = filterCount
+        ? "search-results-filtered-top"
+        : "search-results-top";
+      if (appendFrom) {
+        label = filterCount
+          ? "search-results-page-filtered-top"
+          : "search-results-page-top";
+      }
+      document.l10n.setAttributes(count, label, {
+        shown,
+        count: total,
+        matches: this.fullSet.length,
+      });
+    } else if (appendFrom) {
+      document.l10n.setAttributes(count, "search-result-range", {
+        shown,
+        count: total,
+      });
     } else {
-      showEmpty.style.display = "none";
-      showAll.style.display = "block";
+      document.l10n.setAttributes(count, "search-results-count", {
+        count: total,
+      });
     }
+    document.getElementById("showLoading").hidden = true;
+    document.getElementById("showEmpty").hidden = !!total;
+    if (!total) {
+      document.l10n.setAttributes(
+        document.getElementById("empty-hint"),
+        filterCount ? "search-empty-filter-hint" : "search-empty-hint"
+      );
+    }
+    document.getElementById("gloda-showall").hidden = !total;
+    document.getElementById("sortby").hidden = total < 2;
+    document.getElementById("showMore").hidden = shown >= total;
 
-    const showMore = document.getElementById("showMore");
-    showMore.style.display =
-      this._activeSet.length > numMessageToShow ? "block" : "none";
+    const toggle = document.getElementById("filter-toggle");
+    toggle.hidden = !this.fullSet.length;
+    document.l10n.setAttributes(
+      toggle,
+      filterCount ? "search-filters-active" : "search-filters",
+      filterCount ? { count: filterCount } : null
+    );
+    document.getElementById("clear-filters").hidden = !filterCount;
   },
 
   showMore() {
-    this._numPages += 1;
-    this._showResults();
+    const rows = document.getElementById("results").messagesNode;
+    const appendFrom = rows.childElementCount;
+    this._numPages++;
+    this._showResults(appendFrom);
+    rows.children[appendFrom]?.querySelector(".message-subject").focus();
+  },
+
+  toggleFilters() {
+    const panel = document.getElementById("filter-panel");
+    const toggle = document.getElementById("filter-toggle");
+    panel.hidden = !panel.hidden;
+    toggle.setAttribute("aria-expanded", String(!panel.hidden));
+    if (panel.hidden) {
+      document.querySelector("facet-popup-menu").hide();
+      toggle.focus();
+    } else {
+      this.updateTimeline();
+      document.getElementById("date-range").focus();
+    }
+  },
+
+  clearFacet(faceter) {
+    faceter.constraint = null;
+    delete this._activeConstraints[faceter.attrDef.attributeName];
+    this.build(this._sieveAll());
+  },
+
+  clearFilters() {
+    this._activeConstraints = {};
+    for (const faceter of this.faceters) {
+      faceter.constraint = null;
+      faceter.xblNode?.reset?.();
+    }
+    document.getElementById("filter-toggle").focus();
+    this.setDateFields(null);
+    this.build(this.fullSet);
   },
 
   zoomOut() {
     const facetDate = document.getElementById("facet-date");
-    this.removeFacetConstraint(
-      facetDate.faceter,
-      true,
-      facetDate.vis.constraints
-    );
-    facetDate.setAttribute("zoomedout", "true");
+    if (facetDate.faceter?.constraint) {
+      this.clearFacet(facetDate.faceter);
+      this.setDateFields(null);
+      document.getElementById("date-toggle").focus();
+    }
   },
 
   toggleTimeline() {
-    try {
-      this._timelineShown = !this._timelineShown;
-      if (this._timelineShown) {
-        this._showTimeline();
-      } else {
-        this._hideTimeline(false);
-      }
-    } catch (e) {
-      console.error(e);
+    this._timelineShown = !this._timelineShown;
+    Services.prefs.setBoolPref(
+      "gloda.facetview.hidetimeline",
+      !this._timelineShown
+    );
+    this.updateTimeline();
+  },
+
+  updateTimeline() {
+    const date = document.getElementById("facet-date");
+    const toggle = document.getElementById("date-toggle");
+    toggle.disabled = !date.faceter?.validItems.length;
+    date.hidden = toggle.disabled || !this._timelineShown;
+    toggle.setAttribute("aria-expanded", String(!date.hidden));
+    if (!date.hidden && !document.getElementById("filter-panel").hidden) {
+      date.build(true);
     }
   },
 
-  _showTimeline() {
-    const facetDate = document.getElementById("facet-date");
-    if (facetDate.style.display == "none") {
-      facetDate.style.display = "inherit";
-      // Force binding attachment so the transition to the
-      // visible state actually happens.
-      facetDate.getBoundingClientRect();
-    }
-    const listener = () => {
-      // Need to set overflow to visible so that the zoom button
-      // is not cut off at the top, and overflow=hidden causes
-      // the transition to not work as intended.
-      facetDate.removeAttribute("style");
-    };
-    facetDate.addEventListener("transitionend", listener, { once: true });
-    facetDate.removeAttribute("hide");
-    document.getElementById("date-toggle").toggleAttribute("checked", true);
-    Services.prefs.setBoolPref("gloda.facetview.hidetimeline", false);
+  setDateFields(range) {
+    const from = document.getElementById("date-from");
+    const through = document.getElementById("date-through");
+    const select = document.getElementById("date-range");
+    const formatDate = date =>
+      [
+        String(date.getFullYear()).padStart(4, "0"),
+        String(date.getMonth() + 1).padStart(2, "0"),
+        String(date.getDate()).padStart(2, "0"),
+      ].join("-");
+    from.value = range ? formatDate(range[0]) : "";
+    through.value = range ? formatDate(range[1]) : "";
+    from.max = through.value;
+    through.min = from.value;
+    const isFullYear =
+      range &&
+      range[0].getFullYear() == range[1].getFullYear() &&
+      from.value.endsWith("-01-01") &&
+      through.value.endsWith("-12-31");
+    select.value = !range ? "" : isFullYear ? range[0].getFullYear() : "custom";
+    document.getElementById("custom-date-range").hidden =
+      select.value != "custom";
   },
 
-  _hideTimeline(immediate) {
-    const facetDate = document.getElementById("facet-date");
-    if (immediate) {
-      facetDate.style.display = "none";
-    }
-    facetDate.style.overflow = "hidden";
-    facetDate.setAttribute("hide", "true");
-    document.getElementById("date-toggle").removeAttribute("checked");
-    Services.prefs.setBoolPref("gloda.facetview.hidetimeline", true);
+  applyDateRange(start, end) {
+    const faceter = document.getElementById("facet-date").faceter;
+    this.addFacetConstraint(faceter, true, [[start, end]], true, true);
   },
-
-  _timelineShown: true,
 
   /** For use in hovering specific results. */
   fakeResultFaceter: {},
@@ -910,6 +924,9 @@ var FacetContext = {
     aNukeExisting,
     aCallback
   ) {
+    if (aRanged && aFaceter.type == "date") {
+      this.setDateFields(aGroupValues[0]);
+    }
     const attrName = aFaceter.attrDef.attributeName;
 
     let constraint;
@@ -1059,7 +1076,7 @@ var FacetContext = {
   onItemsRemoved() {},
   onQueryCompleted() {
     if (
-      this.tab.query.completed &&
+      (!this.tab.query || this.tab.query.completed) &&
       (!("IMQuery" in this.tab) || this.tab.IMQuery.completed)
     ) {
       this.initialBuild();
@@ -1084,9 +1101,83 @@ function reachOutAndTouchFrame() {
   const parentWin = us.parent.domWindow;
   const aTab = (FacetContext.tab = parentWin.tab);
   parentWin.tab = null;
-  window.addEventListener("resize", function () {
-    document.getElementById("facet-date").build(true);
+  const filterPanel = document.getElementById("filter-panel");
+  document
+    .getElementById("filter-toggle")
+    .addEventListener("click", () => FacetContext.toggleFilters());
+  document
+    .getElementById("clear-filters")
+    .addEventListener("click", () => FacetContext.clearFilters());
+  document
+    .getElementById("edit-search")
+    .addEventListener("click", () => FacetContext.rootWin.QuickSearchFocus());
+  document
+    .getElementById("date-toggle")
+    .addEventListener("click", () => FacetContext.toggleTimeline());
+  window.addEventListener("resize", () => FacetContext.updateTimeline());
+  document.addEventListener("keydown", event => {
+    if (
+      event.key == "Escape" &&
+      !event.defaultPrevented &&
+      filterPanel.contains(event.target)
+    ) {
+      FacetContext.toggleFilters();
+      event.preventDefault();
+    }
   });
+  const popup = document.querySelector("facet-popup-menu");
+  document.addEventListener("pointerdown", event => {
+    if (!popup.contains(event.target) && !popup.node?.contains(event.target)) {
+      popup.hide();
+    }
+  });
+  document.addEventListener(
+    "scroll",
+    () => popup.hide(popup.contains(document.activeElement)),
+    true
+  );
+
+  document.getElementById("sortby").addEventListener("change", event => {
+    const value = event.target.value;
+    if (Services.prefs.getIntPref("gloda.facetview.sortby") >= 2) {
+      Services.prefs.setIntPref(
+        "gloda.facetview.sortby",
+        value == "-dascore" ? 2 : 3
+      );
+    }
+    FacetContext.sortBy = value;
+  });
+  const from = document.getElementById("date-from");
+  const through = document.getElementById("date-through");
+  from.addEventListener("input", () => {
+    through.min = from.value;
+  });
+  through.addEventListener("input", () => {
+    from.max = through.value;
+  });
+  document.getElementById("date-range").addEventListener("change", event => {
+    const value = event.target.value;
+    if (value == "custom") {
+      document.getElementById("custom-date-range").hidden = false;
+      from.focus();
+    } else if (value) {
+      FacetContext.applyDateRange(
+        new Date(+value, 0),
+        new Date(+value, 11, 31, 23, 59, 59, 999)
+      );
+    } else {
+      FacetContext.clearFacet(document.getElementById("facet-date").faceter);
+      FacetContext.setDateFields(null);
+    }
+  });
+  document
+    .getElementById("custom-date-range")
+    .addEventListener("submit", event => {
+      event.preventDefault();
+      const start = new Date(from.value + "T00:00:00");
+      const end = new Date(through.value + "T23:59:59.999");
+      FacetContext.applyDateRange(start, end);
+    });
   // we need to hook the context up as a listener in all cases since
   //  removal notifications are required.
   if ("searcher" in aTab) {
@@ -1105,18 +1196,23 @@ function reachOutAndTouchFrame() {
     FacetContext.IMCollection = aTab.IMCollection;
   }
 
+  if (aTab.searcher) {
+    QueryExplanation.setFulltext(aTab.searcher);
+  } else {
+    QueryExplanation.setQuery(aTab.query);
+  }
+  const tabmail = FacetContext.rootWin.document.getElementById("tabmail");
+  if (
+    tabmail.currentTabInfo == aTab &&
+    (!aTab.searcher || aTab.searcher.searchString)
+  ) {
+    QueryExplanation.node.focus();
+  }
   // if it has already completed, we need to prod things
   if (
-    aTab.query.completed &&
+    (!aTab.query || aTab.query.completed) &&
     (!("IMQuery" in aTab) || aTab.IMQuery.completed)
   ) {
     FacetContext.initialBuild();
   }
-}
-
-function clickOnBody(event) {
-  if (event.bubbles) {
-    document.querySelector("facet-popup-menu").hide();
-  }
-  return 0;
 }

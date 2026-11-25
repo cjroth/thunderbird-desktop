@@ -23,13 +23,7 @@ function DateFacetVis(aBinding, aCanvasNode) {
 }
 DateFacetVis.prototype = {
   build() {
-    const resultsBarRect = document
-      .getElementById("results")
-      .getBoundingClientRect();
-    this.allowedSpace = resultsBarRect.right - resultsBarRect.left;
-    this.render();
-  },
-  rebuild() {
+    this.allowedSpace = this.canvasNode.clientWidth;
     this.render();
   },
 
@@ -264,6 +258,7 @@ DateFacetVis.prototype = {
     const ch = height - totalAxisLabelHeight;
 
     const [bins, maxBinSize] = this.binBySpan(scale, span, rules);
+    this.binding.describeBins(bins);
 
     // build empty bins for our hot bins
     this.emptyBins = bins.map(() => 0);
@@ -278,8 +273,11 @@ DateFacetVis.prototype = {
       // margins
       .bottom(totalAxisLabelHeight));
 
-    const faceter = this.faceter;
-    const dis = this;
+    // A timeline bin stops at the start of the next day. Gloda's range
+    // query includes its upper bound, just like the date form's Through field.
+    const chooseRange = (start, endExclusive) => {
+      FacetContext.applyDateRange(start, new Date(endExclusive.getTime() - 1));
+    };
     // bin bars...
     vis
       .add(pv.Bar)
@@ -301,15 +299,7 @@ DateFacetVis.prototype = {
         return this.fillStyle("var(--barColor)");
       })
       .event("click", function (d) {
-        dis.constraints = [[d.startDate, d.endDate]];
-        dis.binding.setAttribute("zoomedout", "false");
-        FacetContext.addFacetConstraint(
-          faceter,
-          true,
-          dis.constraints,
-          true,
-          true
-        );
+        chooseRange(d.startDate, d.endDate);
       });
 
     this.hotBars = vis
@@ -340,15 +330,7 @@ DateFacetVis.prototype = {
           return this.fillStyle("var(--dateColor)");
         })
         .event("click", function (d) {
-          dis.constraints = [[d[3], d[4]]];
-          dis.binding.setAttribute("zoomedout", "false");
-          FacetContext.addFacetConstraint(
-            faceter,
-            true,
-            dis.constraints,
-            true,
-            true
-          );
+          chooseRange(d[3], d[4]);
         });
 
       if (labelTier.displayLabel) {

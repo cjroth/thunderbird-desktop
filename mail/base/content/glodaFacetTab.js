@@ -35,6 +35,8 @@ var glodaFacetTabType = {
     const clone = document
       .getElementById("glodaTab")
       .firstElementChild.cloneNode(true);
+    clone.querySelector(".contentTabToolbox").hidden =
+      !!getVisibleGlobalSearchBar();
 
     aTab.panel.setAttribute("id", "glodaTab" + this.lastTabId);
     aTab.panel.appendChild(clone);
@@ -83,9 +85,12 @@ var glodaFacetTabType = {
         "chrome://messenger/content/glodaFacetView.xhtml"
       );
 
-      // Wire up the search input icon click event
-      const searchInput = aTab.panel.querySelector(".remote-gloda-search");
-      searchInput.focus();
+      if (
+        aTab.searchString === "" &&
+        document.getElementById("tabmail").currentTabInfo === aTab
+      ) {
+        QuickSearchFocus();
+      }
       aTab.iframe.removeEventListener("load", xulLoadHandler, {
         capture: true,
       });
@@ -103,8 +108,9 @@ var glodaFacetTabType = {
   saveTabState() {
     // nothing to do; we are not multiplexed
   },
-  showTab() {
-    // nothing to do; we are not multiplexed
+  showTab(tab) {
+    tab.panel.querySelector(".contentTabToolbox").hidden =
+      !!getVisibleGlobalSearchBar();
   },
   getBrowser(aTab) {
     return aTab.browser;
