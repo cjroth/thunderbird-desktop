@@ -2,33 +2,63 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/**
- * Tests Gloda search bar is focused after a search. What we are really
- * interested in however, is the search input not causing an error when it
- * gains focus.
- */
-add_task(async function testGlobalSearchInputGainsFocus() {
-  const searchInput = document.querySelector(".search-bar");
-  EventUtils.synthesizeMouseAtCenter(searchInput, {}, window);
+add_task(async function testRefineSearchFromResults() {
+  const field = document.querySelector(
+    "#unifiedToolbarContent global-search-bar"
+  );
+  field.focus();
   EventUtils.sendString("Bugzilla", window);
   EventUtils.synthesizeKey("KEY_Enter", {}, window);
 
   const tabmail = document.querySelector("tabmail");
-  Assert.equal(tabmail.tabInfo.length, 2);
-  Assert.equal(tabmail.currentTabInfo, tabmail.tabInfo[1]);
-
+  const tab = tabmail.currentTabInfo;
+  Assert.equal(tab.mode.name, "glodaFacet", "Search should open a results tab");
   await TestUtils.waitForCondition(
-    () =>
-      tabmail.currentTabInfo.browser?.currentURI?.spec ==
-      "chrome://messenger/content/glodaFacetView.xhtml"
+    () => tab.browser?.contentDocument.activeElement.id === "query-explanation",
+    "The results heading should receive focus"
+  );
+  const doc = tab.browser.contentDocument;
+  Assert.ok(
+    BrowserTestUtils.isHidden(tab.panel.querySelector(".remote-gloda-search")),
+    "Only the global toolbar search field should be visible"
   );
 
-  const activeElement = document.activeElement;
-  info(`<${activeElement.localName}>`);
+  const edit = doc.getElementById("edit-search");
+  edit.focus();
+  EventUtils.synthesizeKey("KEY_Enter", {}, doc.defaultView);
   Assert.equal(
-    activeElement.getAttribute("is"),
-    "gloda-autocomplete-input",
-    "gloda search input has focus"
+    document.activeElement,
+    field,
+    "Edit should focus the search field"
+  );
+  const input = field.shadowRoot.querySelector("input");
+  Assert.equal(
+    input.value,
+    "Bugzilla",
+    "Edit should restore the current query"
+  );
+  Assert.equal(
+    input.selectionStart,
+    0,
+    "Selection should start at the first character"
+  );
+  Assert.equal(
+    input.selectionEnd,
+    input.value.length,
+    "The whole query should be selected"
+  );
+
+  EventUtils.sendString("calendar", window);
+  EventUtils.synthesizeKey("KEY_Enter", {}, window);
+  Assert.equal(
+    tabmail.currentTabInfo.searchString,
+    "calendar",
+    "Refining should run the edited search"
+  );
+  Assert.equal(
+    tab.searchString,
+    "Bugzilla",
+    "The original results tab should retain its query"
   );
 });
 

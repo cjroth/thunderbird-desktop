@@ -25,9 +25,9 @@ const { GlodaMsgIndexer } = ChromeUtils.importESModule(
 let folder;
 
 /**
- * Tests the 3 global search bars found in the UI:
+ * Exercises both global search entry points:
  * 1) The one on the mail tab.
- * 2) The one in the search result tab.
+ * 2) The fallback when search is removed from the unified toolbar.
  */
 const tests = [
   {
@@ -37,7 +37,7 @@ const tests = [
     tabCountAfter: 2,
   },
   {
-    selector: ".remote-gloda-search",
+    selector: "tabmail [selected] .remote-gloda-search",
     tabCountBefore: 2,
     async before() {
       // Run a search so we can search from the results tab.
@@ -55,6 +55,14 @@ const tests = [
             "chrome://messenger/content/glodaFacetView.xhtml",
         "search result tab did not open in time"
       );
+      const toolbarItem = document.querySelector(
+        "#unifiedToolbarContent .search-bar"
+      );
+      toolbarItem.hidden = true;
+      registerCleanupFunction(() => {
+        toolbarItem.hidden = false;
+      });
+      window.QuickSearchFocus();
     },
     tabCountAfter: 3,
   },

@@ -3,136 +3,190 @@
    - License, v. 2.0. If a copy of the MPL was not distributed with this
    - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
 
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd" [ <!ENTITY % brandDTD SYSTEM "chrome://branding/locale/brand.dtd">
-%brandDTD;
-<!ENTITY % facetViewDTD SYSTEM "chrome://messenger/locale/glodaFacetView.dtd">
-%facetViewDTD; ]>
-<html
-  xmlns="http://www.w3.org/1999/xhtml"
-  xmlns:html="http://www.w3.org/1999/xhtml"
-  xmlns:xul="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
->
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
   <head>
-    <title></title>
+    <title data-l10n-id="search-results-title"></title>
     <meta
       http-equiv="Content-Security-Policy"
       content="default-src chrome:; script-src chrome: 'unsafe-inline' moz-src:; style-src chrome: 'unsafe-inline'"
     />
     <link rel="localization" href="messenger/glodaFacetView.ftl" />
-    <link
-      rel="stylesheet"
-      href="chrome://messenger/skin/glodaFacetView.css"
-      type="text/css"
-    />
-    <!-- Custom elements -->
+    <link rel="stylesheet" href="chrome://messenger/skin/glodaFacetView.css" />
     <script src="chrome://messenger/content/glodaFacet.js"></script>
-    <!-- Global Context -->
     <script src="chrome://messenger/content/glodaFacetView.js"></script>
-    <!-- Libs -->
     <script src="chrome://messenger/content/protovis-r2.6-modded.js"></script>
-    <!-- Facet Binding Stuff that doesn't belong in XBL -->
     <script src="chrome://messenger/content/glodaFacetVis.js"></script>
   </head>
-  <body
-    id="body"
-    onload="reachOutAndTouchFrame()"
-    onmouseup="return clickOnBody(event);"
-  >
+  <body id="body" class="search-page" onload="reachOutAndTouchFrame()">
     <facet-popup-menu class="popup-menu" variety="invisible" />
-    <div id="gloda-facet-view">
-      <div class="facets facets-sidebar" id="facets">
-        <h1 id="filter-header-label">&glodaFacetView.filters.label;</h1>
-        <div>
-          <facet-boolean
-            id="facet-fromMe"
-            type="boolean"
-            attr="fromMe"
-            uninitialized="true"
-          />
-          <facet-boolean
-            id="facet-toMe"
-            type="boolean"
-            attr="toMe"
-            uninitialized="true"
-          />
-          <facet-boolean
-            id="facet-star"
-            type="boolean"
-            attr="star"
-            uninitialized="true"
-          /><br />
-          <facet-boolean-filtered
-            id="facet-attachmentTypes"
-            type="boolean-filtered"
-            attr="attachmentTypes"
-            groupDisplayProperty="categoryLabel"
-            uninitialized="true"
-          />
-        </div>
-      </div>
-
-      <div id="main-column">
-        <div id="header">
-          <div id="query-explanation" />
-          <a
-            id="gloda-showall"
-            class="results-message-showall-button"
-            title="&glodaFacetView.openEmailAsList.tooltip;"
-            onclick="FacetContext.showActiveSetInTab()"
-            onkeypress="
-              if (event.charCode == KeyEvent.DOM_VK_SPACE) {
-                FacetContext.showActiveSetInTab();
-                event.preventDefault();
-              }
-            "
-            tabindex="0"
-          >
-            &glodaFacetView.openEmailAsList.label;
-          </a>
-        </div>
-        <div id="data-column">
-          <!-- facet-results-message is put before facet-date here so that it gets upgraded first.
-        facet-date uses width of facet-results-message for the visualization. Using order property
-        we can show facet-date before facet-results-message -->
-          <facet-results-message id="results" class="results" />
-          <facet-date id="facet-date" class="facetious" type="date" />
-          <div class="loading" id="showLoading">
-            <span class="loading">
-              <img
-                class="loading"
-                src="chrome://messenger/skin/icons/spinning.svg"
-                alt=""
-              />
-              &glodaFacetView.loading.label;
-            </span>
+    <main id="gloda-facet-view" class="search-workspace">
+      <header class="search-header">
+        <div class="search-heading">
+          <div class="query-line">
+            <h1
+              id="query-explanation"
+              class="search-title"
+              dir="auto"
+              tabindex="-1"
+            ></h1>
+            <button
+              id="edit-search"
+              class="button icon-button icon-only toolbar-button edit-search"
+              data-l10n-id="search-edit"
+              hidden="hidden"
+            ></button>
           </div>
-          <div id="showEmpty" class="empty">
-            <span class="empty">
-              <img
-                class="empty"
-                src="chrome://messenger/skin/icons/empty-search-results.svg"
-                alt=""
+          <p id="result-count" class="result-count" role="status"></p>
+        </div>
+        <div class="search-actions">
+          <button
+            id="filter-toggle"
+            class="button icon-button filter-toggle"
+            aria-expanded="false"
+            aria-controls="filter-panel"
+            data-l10n-id="search-filters"
+            hidden="hidden"
+          ></button>
+          <button
+            id="clear-filters"
+            class="button toolbar-button clear-filters"
+            data-l10n-id="search-clear-filters"
+            hidden="hidden"
+          ></button>
+          <select
+            id="sortby"
+            class="select"
+            data-l10n-id="search-sort"
+            hidden="hidden"
+          >
+            <option value="-dascore" data-l10n-id="search-sort-relevance" />
+            <option value="-date" data-l10n-id="search-sort-date" />
+          </select>
+          <button
+            id="gloda-showall"
+            class="button toolbar-button icon-button open-list"
+            onclick="FacetContext.showActiveSetInTab()"
+            data-l10n-id="search-open-list"
+            hidden="hidden"
+          ></button>
+        </div>
+      </header>
+
+      <div class="search-content">
+        <aside
+          id="filter-panel"
+          class="filter-panel"
+          aria-labelledby="filter-header-label"
+          hidden="hidden"
+        >
+          <h2
+            id="filter-header-label"
+            class="filter-heading"
+            data-l10n-id="search-filters"
+          ></h2>
+          <div class="date-controls">
+            <label for="date-range" data-l10n-id="search-date-label"></label>
+            <div class="date-actions">
+              <select
+                id="date-range"
+                class="select"
+                data-l10n-id="search-date-range"
+              >
+                <option value="" data-l10n-id="search-date-any" />
+                <option
+                  id="date-custom"
+                  value="custom"
+                  data-l10n-id="search-date-custom"
+                />
+              </select>
+              <button
+                id="date-toggle"
+                class="button toolbar-button icon-button gloda-timeline-button"
+                aria-controls="facet-date"
+                aria-expanded="false"
+                data-l10n-id="search-timeline"
+              ></button>
+            </div>
+            <form
+              id="custom-date-range"
+              class="date-custom-range"
+              hidden="hidden"
+            >
+              <label>
+                <span data-l10n-id="search-date-start"></span>
+                <input id="date-from" type="date" required="required" />
+              </label>
+              <label>
+                <span data-l10n-id="search-date-end"></span>
+                <input id="date-through" type="date" required="required" />
+              </label>
+              <button
+                class="button"
+                type="submit"
+                data-l10n-id="search-date-apply"
+              ></button>
+            </form>
+            <facet-date
+              id="facet-date"
+              class="facetious date-facet"
+              type="date"
+            />
+          </div>
+          <div id="facets" class="facets">
+            <div class="message-filters">
+              <facet-boolean
+                id="facet-fromMe"
+                type="boolean"
+                attr="fromMe"
+                uninitialized="true"
               />
-              <br />
-              &glodaFacetView.empty.label;
-            </span>
+              <facet-boolean
+                id="facet-toMe"
+                type="boolean"
+                attr="toMe"
+                uninitialized="true"
+              />
+              <facet-boolean
+                id="facet-star"
+                type="boolean"
+                attr="star"
+                uninitialized="true"
+              />
+              <facet-boolean-filtered
+                id="facet-attachmentTypes"
+                type="boolean-filtered"
+                attr="attachmentTypes"
+                groupDisplayProperty="categoryLabel"
+                uninitialized="true"
+              />
+            </div>
+          </div>
+        </aside>
+
+        <div id="data-column" class="result-column">
+          <facet-results-message id="results" class="results" />
+          <div id="showLoading" class="search-loading" role="status">
+            <img src="chrome://messenger/skin/icons/spinning.svg" alt="" />
+            <span data-l10n-id="search-loading"></span>
+          </div>
+          <div id="showEmpty" class="search-empty" hidden="hidden">
+            <img
+              src="chrome://messenger/skin/icons/empty-search-results.svg"
+              alt=""
+            />
+            <h2 data-l10n-id="search-empty"></h2>
+            <p id="empty-hint" data-l10n-id="search-empty-hint"></p>
           </div>
           <button
             id="showMore"
-            class="show-more"
-            tabindex="0"
+            class="button show-more"
+            hidden="hidden"
             onclick="FacetContext.showMore()"
-            onkeypress="
-              if (event.charCode == KeyEvent.DOM_VK_SPACE) {
-                FacetContext.showMore();
-                event.preventDefault();
-              }
-            "
-          >
-            &glodaFacetView.pageMore.label;
-          </button>
+            data-l10n-id="search-show-more"
+          ></button>
         </div>
       </div>
-    </div>
+    </main>
   </body>
 </html>
