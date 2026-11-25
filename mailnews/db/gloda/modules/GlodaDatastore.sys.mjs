@@ -1754,7 +1754,7 @@ export var GlodaDatastore = {
     }
     if (
       typeOfIndex == Ci.mozIStorageValueArray.VALUE_TYPE_INTEGER ||
-      typeOfIndex == Ci.mozIStorageValueArray.VALUE_TYPE_DOUBLE
+      typeOfIndex == Ci.mozIStorageValueArray.VALUE_TYPE_FLOAT
     ) {
       return aRow.getDouble(aIndex);
     }

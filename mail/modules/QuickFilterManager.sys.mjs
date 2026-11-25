@@ -1300,7 +1300,11 @@ export var MessageTextFilter = {
         Services.prefs.getBoolPref("gloda.show_as_list_by_default", false)
           ? "glodaTableList"
           : "glodaFacet",
-        { searcher: new lazy.GlodaMsgSearcher(null, aState.text) }
+        {
+          searcher: new lazy.GlodaMsgSearcher(null, aState.text, undefined, {
+            allowSemantic: true,
+          }),
+        }
       );
       aEvent.preventDefault();
     }

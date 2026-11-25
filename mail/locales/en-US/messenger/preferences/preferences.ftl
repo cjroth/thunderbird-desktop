@@ -278,6 +278,11 @@ gloda-results-plain-list-label =
     .label = Show search results as a plain list
     .accesskey = L
 
+gloda-semantic-search-label =
+    .label = Rank email by meaning when I search with an English question
+
+gloda-semantic-search-description = Applies to search results sorted by relevance in the faceted view. Downloads about 45 MB on first use. Your email and search questions stay on this device.
+
 datetime-formatting-legend = Date and Time Formatting
 
 # Variables:

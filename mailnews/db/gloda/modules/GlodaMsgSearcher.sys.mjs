@@ -6,6 +6,36 @@ import { Gloda } from "resource:///modules/gloda/GlodaPublic.sys.mjs";
 
 import { GlodaConstants } from "resource:///modules/gloda/GlodaConstants.sys.mjs";
 
+const lazy = {};
+ChromeUtils.defineESModuleGetters(lazy, {
+  buildSemanticCandidateQuery:
+    "resource:///modules/gloda/GlodaSemanticCandidates.sys.mjs",
+  getSemanticSearchTerms:
+    "resource:///modules/gloda/GlodaSemanticCandidates.sys.mjs",
+});
+
+/**
+ * Recognize English questions and requests while preserving explicit search
+ * syntax and short lookups. The local reranker is trained on English passages.
+ *
+ * @param {string} text - The user's toolbar input.
+ * @returns {boolean} Whether to retrieve candidates for semantic ranking.
+ */
+export function isSemanticSearchRequest(text) {
+  if (text.length > 512 || /["<>@]|\bNEAR(?:\/\d+)?\b|\b\w+:/iu.test(text)) {
+    return false;
+  }
+  const words = text.trim().split(/\s+/u);
+  return (
+    words.length >= 4 &&
+    (/^(?:who|whose|what|when|where|why|which|how|did|does|can|could|find|show)\b/iu.test(
+      text.trimStart()
+    ) ||
+      (/\?\s*$/u.test(text) &&
+        /\b(?:who|what|when|where|why|which|how)\b/iu.test(text)))
+  );
+}
+
 /**
  * How much time boost should a 'score point' amount to?  The authoritative,
  *  incontrivertible answer, across all time and space, is a week.
@@ -193,12 +223,35 @@ function scoreOffsets(aMessage, aContext) {
  *  mechanism to explicitly score the messages given the search context in
  *  addition to the more generic score adjusting rules.
  */
-export function GlodaMsgSearcher(aListener, aSearchString, aAndTerms) {
+export function GlodaMsgSearcher(
+  aListener,
+  aSearchString,
+  aAndTerms,
+  { allowSemantic = false } = {}
+) {
   this.listener = aListener;
 
   this.searchString = aSearchString;
   this.fulltextTerms = this.parseSearchString(aSearchString);
   this.andTerms = aAndTerms != null ? aAndTerms : true;
+  this.isSemantic = false;
+  if (
+    allowSemantic &&
+    Services.prefs.getBoolPref(
+      "mailnews.database.global.search.semantic.enabled",
+      false
+    ) &&
+    Services.prefs.getBoolPref("browser.ml.enable", false) &&
+    !Services.prefs.getBoolPref("gloda.show_as_list_by_default", false) &&
+    isSemanticSearchRequest(aSearchString)
+  ) {
+    const terms = lazy.getSemanticSearchTerms(aSearchString);
+    if (terms.length) {
+      this.isSemantic = true;
+      this.fulltextTerms = terms;
+      this.andTerms = false;
+    }
+  }
 
   this.query = null;
   this.collection = null;
@@ -262,6 +315,14 @@ GlodaMsgSearcher.prototype = {
   },
 
   buildFulltextQuery() {
+    if (this.isSemantic) {
+      const limit = this.retrievalLimit;
+      return lazy.buildSemanticCandidateQuery(
+        this.fulltextTerms,
+        limit < 0 ? 40 : Math.min(40, limit),
+        this.searchString
+      );
+    }
     const query = Gloda.newQuery(GlodaConstants.NOUN_MESSAGE, {
       noMagic: true,
       explicitSQL: NUEVO_FULLTEXT_SQL,
@@ -318,14 +379,16 @@ GlodaMsgSearcher.prototype = {
   sortBy: "-dascore",
 
   onItemsAdded(aItems, aCollection) {
-    const newScores = Gloda.scoreNounItems(
-      aItems,
-      {
-        terms: this.fulltextTerms,
-        stashedColumns: aCollection.stashedColumns,
-      },
-      [scoreOffsets]
-    );
+    const newScores = this.isSemantic
+      ? aItems.map(item => aCollection.stashedColumns[item.id]?.[1] ?? 0)
+      : Gloda.scoreNounItems(
+          aItems,
+          {
+            terms: this.fulltextTerms,
+            stashedColumns: aCollection.stashedColumns,
+          },
+          [scoreOffsets]
+        );
     if (this.scores) {
       this.scores = this.scores.concat(newScores);
     } else {

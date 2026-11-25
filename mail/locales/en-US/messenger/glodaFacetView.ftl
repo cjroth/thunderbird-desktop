@@ -7,6 +7,10 @@
 #   $n - the number N in "M of N" items
 item-count-m-of-n = { $m } of { $n }
 
+gloda-semantic-ranking = Ranking matches on this device…
+gloda-semantic-ranked = Relevance is ranked by meaning.
+gloda-semantic-fallback = Showing keyword matches. Local ranking is unavailable.
+
 # Variables:
 #   $count - the number items
 facets-mode-to-list-all-label = {

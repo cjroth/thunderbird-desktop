@@ -155,7 +155,9 @@ class GlobalSearchBar extends SearchBar {
     if (!args) {
       const searchString = event.detail;
       args = {
-        searcher: new lazy.GlodaMsgSearcher(null, searchString),
+        searcher: new lazy.GlodaMsgSearcher(null, searchString, undefined, {
+          allowSemantic: true,
+        }),
       };
       if (Services.prefs.getBoolPref("mail.chat.enabled")) {
         args.IMSearcher = new lazy.GlodaIMSearcher(null, searchString);
