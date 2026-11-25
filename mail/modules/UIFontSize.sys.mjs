@@ -30,14 +30,16 @@ export const UIFontSize = {
    */
   MIN_VALUE: 9,
   MAX_VALUE: 30,
-  /**
-   * The default font size of the user's OS, rounded to integer. We use this in
-   * order to prevent issues in case the user has a float default font size
-   * (e.g.: 14.345px). By rounding to an INT, we can always go back the original
-   * default font size and the rounding doesn't affect the actual sizing but
-   * only the value shown to the user.
-   */
+  /** Rounded platform font size from the first registered window. */
   osValue: 0,
+
+  /**
+   * The reading size for app chrome. Honor larger platform text sizes and
+   * give the desktop workspace a 14px baseline on smaller system defaults.
+   */
+  get defaultSize() {
+    return Math.max(14, this.osValue);
+  },
 
   /**
    * Keep track of the state of the custom font size. We use this instead of the
@@ -65,12 +67,12 @@ export const UIFontSize = {
    * Get the font size.
    *
    * @returns {integer} - The current font size defined in the pref or the value
-   *   defined by the OS, extracted from the messenger window computed style.
+   *   derived from the platform when the messenger window first opens.
    */
   get size() {
     // If the pref is set to 0, it means the user never changed font size so we
-    // should use the default OS font size.
-    const size = this.prefValue || this.osValue;
+    // should use the default reading size.
+    const size = this.prefValue || this.defaultSize;
 
     // Fail safe to avoid UI lockdown in case the OS value is wrongly calculated
     // and the value returned is smaller or bigger than the defined thresholds.
@@ -85,13 +87,12 @@ export const UIFontSize = {
   },
 
   /**
-   * True if the current font size matches the default value or the actual OS
-   * size.
+   * True if the current font size matches the configured or computed default.
    *
    * @type {boolean}
    */
   get isDefault() {
-    return this.prefValue === this.DEFAULT || this.prefValue === this.osValue;
+    return this.prefValue === this.DEFAULT || this.prefValue === this.defaultSize;
   },
 
   /**
@@ -103,14 +104,14 @@ export const UIFontSize = {
    */
   browserSize(isPlainText) {
     const langGroup = Services.locale.fontLanguageGroup;
-    if (isPlainText) {
+    if (isPlainText && Services.prefs.getBoolPref("mail.fixed_width_messages")) {
       const monospaceSize = Services.prefs.getIntPref(
         "font.size.monospace." + langGroup,
         this.size
       );
       return Math.max(
         Math.min(monospaceSize, this.size),
-        monospaceSize + (this.size - this.osValue)
+        monospaceSize + (this.size - this.defaultSize)
       );
     }
     const variableSize = Services.prefs.getIntPref(
@@ -119,7 +120,7 @@ export const UIFontSize = {
     );
     return Math.max(
       Math.min(variableSize, this.size),
-      variableSize + (this.size - this.osValue)
+      variableSize + (this.size - this.defaultSize)
     );
   },
 
@@ -153,7 +154,6 @@ export const UIFontSize = {
         .getComputedStyle(win.document.documentElement)
         .getPropertyValue("font-size");
 
-      // Store the rounded default value.
       this.osValue = Math.round(parseFloat(style));
 
       if (!this.isDefault) {
@@ -182,14 +182,6 @@ export const UIFontSize = {
     const browser =
       tabmail?.getBrowserForSelectedTab() ||
       win.document.getElementById("messagepane");
-
-    if (this.isDefault) {
-      win.document.documentElement.style.removeProperty("font-size");
-      this.updateMessageBrowser(browser);
-      this.updateAppMenuButton(win);
-      win.dispatchEvent(new win.CustomEvent("uifontsizechange"));
-      return;
-    }
 
     // Add the font size to the HTML document element.
     win.document.documentElement.style.setProperty(

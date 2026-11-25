@@ -183,6 +183,10 @@
         this.value = new Date();
       });
 
+      if (this.hasAttribute("compact-header")) {
+        this.#buildCompactHeader();
+      }
+
       this.dayBoxes = new Map();
       this.mEditorDate = null;
       this.mExtraDate = null;
@@ -335,6 +339,32 @@
       const lastDateTime = cal.dtz.jsDateToDateTime(date);
       lastDateTime.day = lastDateTime.day + 1;
       return lastDateTime;
+    }
+
+    #monthDisclosure;
+
+    /** Keep month paging visible, with the year controls available on demand. */
+    #buildCompactHeader() {
+      const advanced = this.querySelector(".minimonth-header");
+      const toolbar = document.createElement("div");
+      toolbar.classList.add("minimonth-compact-toolbar");
+      this.#monthDisclosure = document.createElement("button");
+      this.#monthDisclosure.type = "button";
+      this.#monthDisclosure.classList.add("minimonth-month-disclosure");
+      this.#monthDisclosure.ariaExpanded = "false";
+      advanced.id = this.id + "-date-controls";
+      this.#monthDisclosure.setAttribute("aria-controls", advanced.id);
+      advanced.hidden = true;
+      this.#monthDisclosure.addEventListener("click", () => {
+        advanced.hidden = !advanced.hidden;
+        this.#monthDisclosure.ariaExpanded = String(!advanced.hidden);
+      });
+      toolbar.append(
+        this.#monthDisclosure,
+        advanced.querySelector(".months-back-button"),
+        advanced.querySelector(".months-forward-button")
+      );
+      advanced.before(toolbar);
     }
 
     get mReadOnlyHeader() {
@@ -600,6 +630,10 @@
         aDate.getFullYear(),
         aDate.getMonth()
       );
+
+      if (this.#monthDisclosure) {
+        this.#monthDisclosure.textContent = this.mReadOnlyHeader.textContent;
+      }
 
       // Update the calendar.
       const calbox = this.querySelector(".minimonth-calendar");

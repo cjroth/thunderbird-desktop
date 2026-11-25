@@ -33,6 +33,34 @@ calendar-item-all-day =
     .label = All day
     .accesskey = d
 
+# Button that opens the hidden events in an overlapping time slot.
+# Variables:
+#   $count (Number) - Number of hidden calendar items.
+calendar-view-overlap-button = +{ $count }
+    .aria-label = Show { $count } overlapping calendar items
+    .title = Show { $count } overlapping calendar items
+
+calendar-view-overlap-menu =
+    .aria-label = Overlapping calendar items
+
+# Gutter heading beside events that take up a whole day.
+calendar-view-all-day-label = All day
+
+calendar-navigation-today = Today
+    .title = Go to today
+calendar-navigation-sidebar =
+    .title = Toggle calendar sidebar
+    .aria-label = Toggle calendar sidebar
+calendar-navigation-find =
+    .title = Find events
+    .aria-label = Find events
+calendar-navigation-find-input =
+    .placeholder = Search events
+    .aria-label = Search events
+calendar-selected-day-empty = No events scheduled
+calendar-selected-day-until = Until { $time }
+calendar-selected-day-from = From { $time }
+
 # Event Dialog Warnings
 warning-end-before-start = The end date you entered occurs before the start date
 warning-until-date-before-start = The until date occurs before the start date
@@ -564,9 +592,9 @@ datetime-with-timezone = { $datetime }, { $timezone }
 single-long-calendar-week = Calendar Week: { $index }
 
 # LOCALIZATION NOTE (single-calendar-week):
-# used for display of calendar weeks in short form like 'CW 43'
+# used for display of a single week in the calendar navigation header
 #    $index will be replaced with the index of the week
-single-calendar-week = CW: { $index }
+single-calendar-week = Week { $index }
     .title = Calendar Week: { $index }
 
 # LOCALIZATION NOTE (several-long-calendar-weeks):
@@ -576,10 +604,10 @@ single-calendar-week = CW: { $index }
 several-long-calendar-weeks = Calendar Weeks { $startIndex }-{ $endIndex }
 
 # LOCALIZATION NOTE (several-calendar-weeks):
-# used for display of calendar weeks in short form like 'CWs 43 - 45'
+# used for display of a range of weeks in the calendar navigation header
 #    $startIndex will be replaced with the index of the start-week
 #    $endIndex will be replaced with the index of the end-week
-several-calendar-weeks = CWs: { $startIndex }-{ $endIndex }
+several-calendar-weeks = Weeks { $startIndex }–{ $endIndex }
     .title = Calendar Weeks { $startIndex }-{ $endIndex }
 
 # LOCALIZATION NOTE (multiweek-view-week):

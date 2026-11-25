@@ -273,6 +273,9 @@ function observeViewDaySelect(event) {
   }
 
   getMinimonth().selectDate(jsDate, jsMainDate);
+  if (gCurrentMode == "calendar" && event.target == currentView()) {
+    document.getElementById("selectedDayAgenda").showDay(date);
+  }
   currentView().focus();
 }
 

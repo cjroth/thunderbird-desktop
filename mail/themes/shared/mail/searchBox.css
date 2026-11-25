@@ -131,7 +131,33 @@ input::-moz-search-clear-button {
   }
 }
 
+/* Keep the active query editable alongside the results it controls. */
+.glodaTabToolbar {
+  justify-content: center;
+  padding: 8px clamp(12px, 2vw, 30px);
+  padding-inline-start: calc(clamp(12rem, 19vw, 19rem) + 16px);
+  background-color: var(--desk-surface);
+}
+
+.glodaTabToolbar > spacer {
+  display: none;
+}
+
 .remote-gloda-search-container {
-  min-inline-size: 10em;
+  min-inline-size: 0;
+  max-inline-size: 54rem;
   align-items: center;
+}
+
+.remote-gloda-search-container > .remote-gloda-search {
+  flex: 1;
+  min-inline-size: 0;
+  min-block-size: 34px;
+  font: inherit;
+}
+
+@media (max-width: 620px) {
+  .glodaTabToolbar {
+    padding-inline: 12px;
+  }
 }

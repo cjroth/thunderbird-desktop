@@ -705,3 +705,108 @@ label.label {
   -moz-context-properties: fill;
   fill: var(--selected-item-color);
 }
+
+/* Both the window and tab host use the same event form. */
+#calendar-event-dialog-inner {
+  --event-gutter: clamp(12px, 3vw, 32px);
+  color: var(--desk-ink);
+  font-family: var(--desk-font);
+
+  & #event-grid {
+    padding: 0.8rem var(--event-gutter) 0;
+  }
+
+  & #event-grid th {
+    padding-inline-end: 0.8rem;
+    color: var(--desk-muted);
+    font-size: 0.91rem;
+    font-weight: 550;
+    vertical-align: middle;
+  }
+
+  & #item-title {
+    min-inline-size: 0;
+    font: 650 1.55rem/1.25 var(--desk-font);
+    letter-spacing: -0.035em;
+    padding: 0.35rem 0.5rem;
+  }
+
+  & #item-location {
+    min-inline-size: 0;
+    padding: 0.3rem 0.5rem;
+  }
+
+  & #event-grid-title-row td {
+    padding-block-end: 0.7rem;
+  }
+
+  & #event-grid .separator td {
+    border-color: var(--desk-line);
+  }
+
+  & #event-grid-tab-vbox {
+    padding: 0.45rem var(--event-gutter) 0.8rem;
+    min-block-size: 0;
+  }
+
+  & #event-grid-tabs {
+    border-block-end: 1px solid var(--desk-line);
+
+    & tab {
+      appearance: none;
+      background-color: transparent;
+      color: var(--desk-muted);
+      border: 0;
+      border-block-end: 2px solid transparent;
+      padding: 0.35rem 0.55rem;
+    }
+
+    & tab[selected] {
+      color: var(--desk-accent);
+      border-block-end-color: currentColor;
+    }
+  }
+
+  & #FormatToolbox {
+    background: var(--desk-canvas);
+    border: 1px solid var(--desk-line);
+    border-block-end: 0;
+    border-radius: 6px 6px 0 0;
+  }
+}
+
+#calendar-event-window:has(#calendar-event-dialog) {
+  min-inline-size: min(43em, 660px);
+  min-block-size: min(49em, 690px);
+}
+
+#calendar-event-dialog #event-toolbar {
+  padding: 3px 6px;
+  border-block-end: 1px solid var(--desk-line);
+}
+
+#calendar-event-dialog #button-saveandclose {
+  appearance: none;
+  background-color: var(--desk-accent);
+  color: var(--desk-on-accent);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-weight: 600;
+
+  &:enabled:hover {
+    background-color: color-mix(in srgb, var(--desk-accent) 90%, var(--desk-ink));
+  }
+}
+
+@media not (prefers-contrast) {
+  :root#calendar-event-dialog-inner:not([lwtheme]) {
+    background: var(--desk-surface) !important;
+
+    & :is(#item-title, #item-location) {
+      color: var(--desk-ink);
+      background-color: var(--desk-surface);
+      border: 1px solid var(--desk-line);
+    }
+  }
+}

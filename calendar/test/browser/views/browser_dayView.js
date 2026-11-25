@@ -56,6 +56,11 @@ add_task(async function testDayView() {
 
   await saveAndCloseItemDialog(dialogWindow);
 
+  const agenda = document.getElementById("selectedDayAgenda");
+  await agenda.ready;
+  const agendaTitle = () => agenda.querySelector(".calendar-agenda-title")?.textContent;
+  Assert.equal(agendaTitle(), TITLE1, "Creating the event updates the selected day's agenda");
+
   // If it was created successfully, it can be opened.
   ({ dialogWindow, iframeWindow } = await CalendarTestUtils.dayView.editEventAt(window, 1));
   await setData(dialogWindow, iframeWindow, { title: TITLE2 });
@@ -72,13 +77,53 @@ add_task(async function testDayView() {
     return eventName.textContent == TITLE2;
   }, "event was modified in the view");
 
+  Assert.equal(agendaTitle(), TITLE2, "The agenda shows the edited title");
+  await CalendarTestUtils.goToDate(window, 2009, 1, 2);
+  await agenda.ready;
+  Assert.equal(agenda.childElementCount, 0, "The next day has no scheduled events");
+  await CalendarTestUtils.goToDate(window, 2009, 1, 1);
+  await agenda.ready;
+  Assert.equal(agendaTitle(), TITLE2, "Returning to the scheduled date shows the event again");
+  eventBox = CalendarTestUtils.dayView.getEventBoxAt(window, 1);
+
   // Delete event
   EventUtils.synthesizeMouseAtCenter(eventBox, {}, window);
   eventBox.focus();
   EventUtils.synthesizeKey("KEY_Delete", {}, window);
   await CalendarTestUtils.dayView.waitForNoEventBoxAt(window, 1);
 
-  Assert.ok(true, "Test ran to completion");
+  Assert.equal(agenda.childElementCount, 0, "Deleting the event removes it from the agenda");
+});
+
+add_task(async function test_agendaOrdersEventsInViewTimezone() {
+  const calendar = CalendarTestUtils.createCalendar("Day agenda", "memory");
+  registerCleanupFunction(() => CalendarTestUtils.removeCalendar(calendar));
+  await CalendarTestUtils.setCalendarView(window, "day");
+  await CalendarTestUtils.goToDate(window, 2022, 4, 13);
+  const agenda = document.getElementById("selectedDayAgenda");
+  await agenda.ready;
+
+  // The manifest sets the calendar timezone to UTC. 17:00 in Paris is 15:00 UTC.
+  for (const [title, wallTime, timezone] of [
+    ["Floating appointment", "20220413T153000", cal.dtz.floating],
+    ["Paris appointment", "20220413T170000", cal.timezoneService.getTimezone("Europe/Paris")],
+  ]) {
+    const event = new CalEvent();
+    event.title = title;
+    const start = cal.createDateTime(wallTime);
+    start.timezone = timezone;
+    event.startDate = start;
+    const end = start.clone();
+    end.minute += 30;
+    event.endDate = end;
+    await calendar.addItem(event);
+  }
+
+  Assert.deepEqual(
+    Array.from(agenda.querySelectorAll(".calendar-agenda-title"), label => label.textContent),
+    ["Paris appointment", "Floating appointment"],
+    "The agenda sorts floating and zoned appointments by the local times shown in the grid"
+  );
 });
 
 add_task(async function testDayViewManyAllDayItems() {
@@ -186,7 +231,7 @@ add_task(async function testDayViewManyOverlappingItems() {
     Array.from(column.querySelectorAll(".multiday-events-overflow-item"), el => el.textContent);
 
   await TestUtils.waitForCondition(
-    () => getOverflowTexts()[0] == "… and 5 more",
+    () => getOverflowTexts()[0] == "+5",
     "overflow indicator should count the events not shown"
   );
   Assert.deepEqual(
@@ -200,10 +245,24 @@ add_task(async function testDayViewManyOverlappingItems() {
     "an event not overlapping others should use the full width"
   );
 
+  const moreButton = column.querySelector(".multiday-events-overflow-item");
+  const opened = BrowserTestUtils.waitForEvent(document.getElementById("mainPopupSet"), "popupshown");
+  moreButton.focus();
+  EventUtils.synthesizeKey("KEY_Enter", {}, window);
+  const menu = (await opened).target;
+  Assert.deepEqual(
+    Array.from(menu.children, item => item.getAttribute("label")).sort(),
+    titles(8, 12),
+    "the keyboard-accessible menu should offer every hidden occurrence"
+  );
+  const closed = BrowserTestUtils.waitForEvent(menu, "popuphidden");
+  menu.hidePopup();
+  await closed;
+
   info("deleting a shown event");
   await calendar.deleteItem(items[0]);
   await TestUtils.waitForCondition(
-    () => getOverflowTexts()[0] == "… and 4 more",
+    () => getOverflowTexts()[0] == "+4",
     "overflow indicator should update"
   );
   Assert.deepEqual(
@@ -254,7 +313,7 @@ add_task(async function testDayViewOverflowClusters() {
   const getOverflowElements = () => [...column.querySelectorAll(".multiday-events-overflow-item")];
 
   await TestUtils.waitForCondition(
-    () => getOverflowElements()[0]?.textContent == "… and 2 more",
+    () => getOverflowElements()[0]?.textContent == "+2",
     "overflow indicator should count the late events not shown"
   );
   Assert.equal(getOverflowElements().length, 1, "there should be one overflow indicator");
@@ -299,13 +358,14 @@ add_task(async function testDayViewDateLabel() {
   await CalendarTestUtils.goToDate(window, 2022, 4, 13);
 
   const heading = CalendarTestUtils.dayView.getColumnHeading(window);
-  const labelSpan = heading.querySelector("span:not([hidden])");
+  const date = heading.querySelector(".day-column-number");
 
   await document.l10n.translateRoots();
+  Assert.equal(heading.ariaLabel, "Wednesday, April 13, 2022");
   Assert.equal(
-    labelSpan.textContent,
-    "Wednesday Apr 13",
-    "the date label should contain the displayed date in a human-readable string"
+    date.textContent,
+    "13",
+    "the date number should identify the day"
   );
 });
 
@@ -376,7 +436,7 @@ add_task(async function testDayViewNavbar() {
   const calendarWeek = CalendarTestUtils.getNavBarCalendarWeekBox(window);
   Assert.equal(
     calendarWeek.textContent,
-    "CW: 14",
+    "Week 14",
     "calendar week label should contain an indicator of which week contains displayed date"
   );
 });

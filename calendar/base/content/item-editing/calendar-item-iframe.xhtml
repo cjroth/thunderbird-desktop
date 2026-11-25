@@ -210,22 +210,6 @@
     </vbox>
 
     <html:table id="event-grid">
-      <!-- Calendar -->
-      <html:tr>
-        <html:th>
-          <label
-            id="item-calendar-label"
-            value="&event.calendar.label;"
-            accesskey="&event.calendar.accesskey;"
-            control="item-calendar"
-            disable-on-readonly="true"
-          />
-        </html:th>
-        <html:td id="event-grid-item-calendar-td">
-          <menulist id="item-calendar" disable-on-readonly="true" oncommand="updateCalendar()" />
-        </html:td>
-      </html:tr>
-
       <!-- Title -->
       <html:tr id="event-grid-title-row">
         <html:th>
@@ -244,6 +228,22 @@
             oninput="updateTitle()"
             aria-labelledby="item-title-label"
           />
+        </html:td>
+      </html:tr>
+
+      <!-- Calendar -->
+      <html:tr>
+        <html:th>
+          <label
+            id="item-calendar-label"
+            value="&event.calendar.label;"
+            accesskey="&event.calendar.accesskey;"
+            control="item-calendar"
+            disable-on-readonly="true"
+          />
+        </html:th>
+        <html:td id="event-grid-item-calendar-td">
+          <menulist id="item-calendar" disable-on-readonly="true" oncommand="updateCalendar()" />
         </html:td>
       </html:tr>
 

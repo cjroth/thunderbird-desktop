@@ -17,7 +17,7 @@
     --menu-panel-button-width: calc(--menu-panel-width / 3 - 1.1px);
     /* Complement the .subviewbutton margin. */
     --panel-padding: 8px 0;
-    --panel-menuitem-border-radius: 3px;
+    --panel-menuitem-border-radius: 6px;
     --appmenu-button-border-color: light-dark(hsla(210, 4%, 10%, 0.14), rgba(249, 249, 250, 0.2));
     --appmenu-button-margin: 0 8px;
     --appmenu-button-padding: 6px;
@@ -29,8 +29,8 @@
     --appmenu-warning-background-color-active: light-dark(#ffe38f, hsla(55, 100%, 50%, 0.3));
     --appmenu-warning-color: light-dark(black, #f9f9fa);
     --appmenu-warning-border-color: light-dark(hsl(45, 100%, 77%), hsla(55, 100%, 50%, 0.3));
-    --appmenu-icons-fill: light-dark(color-mix(in srgb, var(--color-ink-70) 20%, transparent), color-mix(in srgb, var(--color-ink-10) 20%, transparent));
-    --appmenu-icons-stroke: light-dark(var(--color-ink-70), var(--color-ink-10));
+    --appmenu-icons-fill: color-mix(in srgb, var(--desk-muted) 12%, transparent);
+    --appmenu-icons-stroke: var(--desk-muted);
   }
 
   @media (prefers-contrast) {

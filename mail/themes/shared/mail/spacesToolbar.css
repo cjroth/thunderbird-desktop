@@ -2,154 +2,109 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* Colors variables */
-
 :root {
-  --spaces-bg-color: var(--color-surface-lower);
-  --spaces-bg-image: light-dark(
-    linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.05) 100%),
-    linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.02) 100%)
-  );
-  --spaces-button-text-color: var(--color-text-base);
-  --spaces-button-active-text-color: var(--button-primary-text-color);
-  --spaces-button-active-bg-color: var(--button-primary-background-color);
+  --spaces-bg-color: var(--desk-surface);
+  --spaces-button-text-color: var(--desk-muted);
+  --spaces-button-active-bg-color: var(--desk-accent-soft);
+
+  &[lwtheme]:not([theme-in-app]) {
+    --spaces-bg-color: var(--toolbar-bgcolor, var(--desk-surface));
+    --spaces-button-text-color: var(--toolbar-color, currentColor);
+  }
+  --spaces-button-active-text-color: var(--desk-accent);
   --spaces-button-badge-text-color: var(--color-white);
   --spaces-button-badge-bg-color: var(--color-red-70);
-  --spaces-button-opacity: 1;
-
-  &:-moz-window-inactive {
-    --spaces-button-opacity: 0.7;
-    --spaces-bg-image: none;
-  }
-
-  @media (prefers-contrast) {
-    --spaces-bg-image: none;
-  }
-
-  /* Density variations */
-
-  --messenger-body-border: 1px;
-  --spaces-icon-size: 20px;
-  --spaces-padding: 7px;
-  --spaces-gap: 15px;
-  --spaces-container-gap: 15px;
-  --spaces-button-padding: 5px;
-  --spaces-pinned-button-margin: 5px;
-  --spaces-button-badge-padding: 1px 6px;
-  --spaces-button-badge-font: 0.9rem;
+  --spaces-icon-size: 17px;
+  --spaces-cell-height: max(2.45rem, 34px);
+  --spaces-pinned-button-margin: 4px;
+  --spaces-button-badge-padding: 1px 4px;
+  --spaces-button-badge-font: 0.75rem;
   --spaces-menuitem-current-indicator-size: 3px;
-  --spaces-total-width: calc(2 * var(--spaces-padding) + var(--spaces-icon-size) + 2 * var(--spaces-button-padding) + var(--messenger-body-border));
 
   &[uidensity="compact"] {
+    --spaces-cell-height: max(2.05rem, 28px);
     --spaces-icon-size: 16px;
-    --spaces-padding: 6px;
-    --spaces-gap: 9px;
-    --spaces-container-gap: 9px;
-    --spaces-button-padding: 4px;
-    --spaces-pinned-button-margin: 4px;
-    --spaces-button-badge-padding: 1px 4px;
-    --spaces-button-badge-font: 0.85rem;
-    --spaces-menuitem-current-indicator-size: 3px;
   }
 
   &[uidensity="touch"] {
-    --spaces-icon-size: 24px;
-    --spaces-padding: 9px;
-    --spaces-gap: 18px;
-    --spaces-container-gap: 18px;
-    --spaces-button-padding: 6px;
-    --spaces-pinned-button-margin: 6px;
-    --spaces-button-badge-padding: 3px 8px;
-    --spaces-button-badge-font: 1rem;
-    --spaces-menuitem-current-indicator-size: 4px;
+    --spaces-cell-height: max(2.9rem, 40px);
+    --spaces-icon-size: 20px;
   }
 
-  /* DPI variations */
-
-  @media (min-resolution: 1.45dppx) and (max-resolution: 1.95dppx) {
-    --messenger-body-border: 0px; /* Keep the px unit. */
+  @media (prefers-contrast) {
+    --spaces-button-text-color: ButtonText;
+    --spaces-button-active-bg-color: Highlight;
+    --spaces-button-active-text-color: HighlightText;
   }
 }
 
-/* The spaces toolbar is using fixed positioning instead of being the left most
- * element in the window, because the toolbox has to touch both sides of the
- * window to properly draw client-side window decorations on GTK. To account for
- * the spaces toolbar having fixed positioning, the window contents are moved to
- * the right by its width. */
-
 .spaces-toolbar:not([hidden]) {
   display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: var(--spaces-gap);
+  flex: none;
+  align-items: center;
   background-color: var(--spaces-bg-color);
-  background-image: var(--spaces-bg-image);
-  border-inline-end: 1px solid var(--sidebar-border);
-  position: fixed;
-  inset-inline-start: 0;
-  inset-block: 0;
-  padding: var(--spaces-padding);
-  z-index: 2;
-
-  & ~ #messengerBody,
-  :root:not(.customizingUnifiedToolbar) & ~ #navigation-toolbox #titlebar {
-    /* Move the window content in by the width of the spaces toolbar */
-    margin-inline-start: var(--spaces-total-width);
-  }
-
-  :root:not(.customizingUnifiedToolbar) & ~ #navigation-toolbox #unifiedToolbarContainer {
-    inline-size: calc(100vw - var(--spaces-total-width));
-  }
+  color: var(--spaces-button-text-color);
+  margin-inline: clamp(4px, 1vw, 18px) 4px;
+  border-radius: 8px;
 }
 
 .spaces-toolbar-container {
   display: flex;
-  flex-direction: column;
-  align-items: start;
-  gap: var(--spaces-container-gap);
+  align-items: center;
+  gap: 2px;
+}
+
+.spaces-toolbar-bottom-container {
+  margin-inline-start: 5px;
+  border-inline-start: 1px solid var(--desk-line);
+  padding-inline-start: 5px;
 }
 
 .spaces-toolbar-button {
+  -moz-window-dragging: no-drag;
+  appearance: none;
   position: relative;
-  block-size: auto;
-  min-inline-size: auto;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  min-inline-size: var(--spaces-cell-height);
+  block-size: var(--spaces-cell-height);
   margin: 0;
-  padding: var(--spaces-button-padding);
-  line-height: 0; /* We never show text in these buttons */
-  border: none;
-  background-color: transparent;
-  opacity: var(--spaces-button-opacity);
+  padding-inline: 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
   color: var(--spaces-button-text-color);
-  outline: none;
+  font: 550 0.91rem/1 var(--desk-font);
 
-  &:focus-visible:not(:hover) {
-    outline: 2px solid var(--selected-item-color);
+  &[hidden] {
+    display: none;
   }
 
-  &.current {
-    &:focus-visible:not(:hover) {
-      outline-offset: 2px;
-    }
-
-    &,
-    &:hover {
-      background-color: var(--spaces-button-active-bg-color);
-      color: var(--spaces-button-active-text-color);
-    }
+  &:hover {
+    background-color: color-mix(in srgb, currentColor 8%, transparent);
+    color: var(--desk-ink);
   }
 
-  &:hover:not(.current) {
-    background-color: color-mix(in srgb, currentColor 10%, transparent);
-
-    @media (prefers-contrast) {
-      background-color: var(--spaces-button-active-bg-color);
-      color: var(--spaces-button-active-text-color);
-    }
-  }
-
-  &:is(:not([disabled])):hover:active {
+  &.current,
+  &:active {
     background-color: var(--spaces-button-active-bg-color);
     color: var(--spaces-button-active-text-color);
+  }
+
+  &:focus-visible {
+    outline: var(--focus-outline);
+    outline-offset: 1px;
+  }
+
+  & .space-label {
+    white-space: nowrap;
+    max-inline-size: 8em;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   & > img {
@@ -158,29 +113,57 @@
   }
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .spaces-toolbar {
-    transition: background-color 280ms ease;
-  }
+#spacesToolbarAddonsContainer:has(.current[hidden]) + #spacesToolbarAddonsOverflowButton {
+  color: var(--spaces-button-active-text-color);
+  background-color: var(--spaces-button-active-bg-color);
+}
 
+#spacesToolbarAddonsContainer:has(.has-badge[hidden]) + #spacesToolbarAddonsOverflowButton::after {
+  content: "";
+  position: absolute;
+  inset-inline-end: 3px;
+  inset-block-start: 3px;
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: 50%;
+  background-color: var(--spaces-button-badge-bg-color);
+}
+
+.spaces-toolbar-bottom-container .space-label {
+  display: none;
+}
+
+#spacesToolbarAddonsContainer {
+  --spaces-addon-slots: 2;
+}
+
+@media (max-width: 1150px) {
+  #spacesToolbarAddonsContainer {
+    --spaces-addon-slots: 1;
+  }
+  .spaces-toolbar-button:not(.current) .space-label {
+    display: none;
+  }
+}
+
+@media (max-width: 800px) {
+  #spacesToolbarAddonsContainer {
+    --spaces-addon-slots: 0;
+  }
+  .spaces-toolbar-button .space-label {
+    display: none;
+  }
   .spaces-toolbar-button {
-    transition:
-      background-color 280ms ease,
-      opacity 280ms ease,
-      color 280ms;
-
-    & > img {
-      transition:
-        fill 280ms ease,
-        stroke 280ms ease,
-        opacity 280ms ease;
-    }
+    padding-inline: 3px;
   }
+  .spaces-toolbar {
+    margin-inline: 3px;
+  }
+}
 
-  .spaces-toolbar-pinned-button {
-    transition:
-      background-color 280ms ease,
-      box-shadow 280ms ease;
+@media (prefers-reduced-motion: no-preference) {
+  .spaces-toolbar-button {
+    transition: background-color 120ms ease, color 120ms ease;
   }
 }
 
@@ -310,22 +293,25 @@ img {
   stroke-opacity: 0;
 }
 
-#collapseButton:-moz-locale-dir(rtl) img,
-#spacesToolbarReveal img,
-#spacesPopupButtonReveal image {
-  transform: scaleX(-1);
+#collapseButton img {
+  transform: rotate(90deg);
 }
 
-#spacesToolbarReveal:-moz-locale-dir(rtl) img,
-#spacesPopupButtonReveal:-moz-locale-dir(rtl) image {
-  transform: none;
+#spacesToolbarReveal img,
+#spacesPopupButtonReveal image {
+  transform: rotate(-90deg);
+}
+
+@media (hover: hover) and (prefers-contrast: no-preference) {
+  #spacesToolbar:not(:hover, :focus-within) #collapseButton {
+    opacity: 0;
+  }
 }
 
 /* Add-ons section */
 
-#spacesToolbarAddonsContainer {
-  flex: 1 1 0;
-  min-block-size: 0;
+#spacesToolbarAddonsContainer:has(> button:not([hidden])) {
+  margin-inline-start: 4px;
 }
 
 .spaces-badge-container {

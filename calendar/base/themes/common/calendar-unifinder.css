@@ -31,8 +31,22 @@
   );
 }
 
+#unifinder-searchBox {
+  align-items: center;
+  gap: 8px;
+  padding: 8px clamp(12px, 2cqi, 26px);
+}
+#unifinder-searchBox .calendar-event-search {
+  min-inline-size: 50px;
+}
+#unifinder-searchBox menulist {
+  margin: 0;
+  max-inline-size: 16em;
+}
 #unifinder-search-field {
   flex: 1;
+  margin: 0;
+  min-inline-size: 0;
   --input-text-max-width: none;
 }
 

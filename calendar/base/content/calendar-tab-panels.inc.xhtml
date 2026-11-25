@@ -9,6 +9,8 @@
       <html:div id="primaryButtonSidePanel"
                 class="sidebar-panel-header"
                 xmlns="http://www.w3.org/1999/xhtml">
+        <h1 id="plannerCalendarHeading" data-l10n-id="toolbar-calendar-label"></h1>
+        <h1 id="plannerTasksHeading" data-l10n-id="toolbar-tasks-label"></h1>
         <button id="sidePanelNewEvent"
                 data-l10n-id="calendar-new-event-primary-button"
                 class="button button-primary icon-button"
@@ -29,12 +31,28 @@
                          refcontrol="calendar_toggle_minimonthpane_command">
         <vbox align="center">
           <hbox id="calMinimonthBox" pack="center">
-            <calendar-minimonth id="calMinimonth" onchange="minimonthPick(this.value);"/>
+            <calendar-minimonth id="calMinimonth" compact-header="true" onchange="minimonthPick(this.value);"/>
           </hbox>
         </vbox>
       </calendar-modevbox>
       <separator id="minimonth-splitter" style="min-width:100px;"/>
       <vbox id="calendar-panel" flex="1">
+        <calendar-modevbox id="selectedDayAgendaPane" mode="calendar">
+          <html:section aria-labelledby="selectedDayAgendaHeading">
+            <html:h2 id="selectedDayAgendaHeading"></html:h2>
+            <html:ol id="selectedDayAgenda" is="calendar-day-agenda"
+                     aria-labelledby="selectedDayAgendaHeading"></html:ol>
+            <html:p id="selectedDayAgendaEmpty" data-l10n-id="calendar-selected-day-empty"></html:p>
+            <template id="selectedDayAgendaRow" xmlns="http://www.w3.org/1999/xhtml">
+              <li>
+                <button type="button" class="calendar-agenda-event">
+                  <span class="calendar-agenda-title"></span>
+                  <span class="calendar-agenda-time"></span>
+                </button>
+              </li>
+            </template>
+          </html:section>
+        </calendar-modevbox>
         <calendar-modevbox id="task-filter-pane"
                            mode="task"
                            refcontrol="calendar_toggle_filter_command">
@@ -134,8 +152,98 @@
         <vbox id="calendar-deactivated-notification-location-events">
           <!-- Calendar deactivated notificationbox for events will be added here lazily. -->
         </vbox>
+        <!-- Calendar Navigation Control Bar -->
+        <html:div id="calendarViewHeader"
+                  xmlns="http://www.w3.org/1999/xhtml">
+          <div class="calendar-period-container">
+            <button id="calendarSidebarToggle"
+                    class="button button-flat icon-button icon-only"
+                    type="button"
+                    aria-controls="calSidebar"
+                    data-l10n-id="calendar-navigation-sidebar"
+                    onclick="togglePaneSplitter('calsidebar_splitter')"></button>
+            <div class="calendar-period">
+              <h1 id="intervalDescription" class="view-header"></h1>
+              <span id="calendarWeek" class="view-header"></span>
+            </div>
+          </div>
+          <div class="calendar-navigation">
+            <button id="calendarHeaderNewEvent"
+                    class="button button-primary"
+                    data-l10n-id="calendar-new-event-primary-button"
+                    onclick="goDoCommand('calendar_new_event_command')"
+                    type="button"></button>
+            <div id="calendarControls">
+              <button id="todayViewButton"
+                      class="button"
+                      data-l10n-id="calendar-navigation-today"
+                      onclick="currentView().moveView()"
+                      type="button"></button>
+              <button id="previousViewButton"
+                      class="button button-flat icon-button icon-only"
+                      onclick="goDoCommand('calendar_view_prev_command')"
+                      type="button"></button>
+              <button id="nextViewButton"
+                      class="button button-flat icon-button icon-only"
+                      onclick="goDoCommand('calendar_view_next_command')"
+                      type="button"></button>
+            </div>
+            <div id="viewToggle" role="tablist" class="calview-toggle">
+              <button id="calTabDay"
+                      class="calview-toggle-item"
+                      role="tab"
+                      value="day"
+                      tabindex="-1"
+                      aria-controls="day-view"
+                      aria-selected="false"
+                      data-l10n-id="calendar-view-toggle-day"></button>
+              <button id="calTabWeek"
+                      class="calview-toggle-item"
+                      role="tab"
+                      value="week"
+                      tabindex="0"
+                      aria-controls="week-view"
+                      aria-selected="true"
+                      data-l10n-id="calendar-view-toggle-week"></button>
+              <button id="calTabMultiweek"
+                      class="calview-toggle-item"
+                      role="tab"
+                      value="multiweek"
+                      tabindex="-1"
+                      aria-controls="multiweek-view"
+                      aria-selected="false"
+                      data-l10n-id="calendar-view-toggle-multiweek"></button>
+              <button id="calTabMonth"
+                      class="calview-toggle-item"
+                      role="tab"
+                      value="month"
+                      tabindex="-1"
+                      aria-controls="month-view"
+                      aria-selected="false"
+                      data-l10n-id="calendar-view-toggle-month"></button>
+            </div>
+            <button id="calendarFindEvents"
+                    class="button button-flat icon-button icon-only"
+                    aria-controls="bottom-events-box"
+                    data-l10n-id="calendar-navigation-find"
+                    onclick="goDoCommand('calendar_show_unifinder_command')"
+                    type="button"></button>
+            <button id="calendarControlBarMenu"
+                    class="button button-flat icon-button icon-only"
+                    onclick="showCalControlBarMenuPopup(event)"
+                    data-l10n-id="calendar-control-bar-menu-button"
+                    type="button">
+            </button>
+          </div>
+        </html:div>
         <vbox id="bottom-events-box" persist="height">
           <hbox id="unifinder-searchBox" class="themeable-brighttext" persist="collapsed">
+            <box class="calendar-event-search" align="center" flex="1">
+              <html:input id="unifinder-search-field"
+                          type="search"
+                          class="themeableSearchBox"
+                          data-l10n-id="calendar-navigation-find-input" />
+            </box>
             <box align="center">
               <menulist id="event-filter-menulist" value="P7D" persist="value">
                 <menupopup id="event-filter-menupopup" oncommand="refreshUnifinderFilterInterval()">
@@ -182,10 +290,6 @@
                             data-l10n-id="calendar-event-listing-interval-all"/>
                 </menupopup>
               </menulist>
-            </box>
-            <box align="center" flex="1">
-              <label control="unifinder-search-field" data-l10n-id="calendar-search-options-searchfor"/>
-              <html:input type="search" id="unifinder-search-field" class="themeableSearchBox" />
             </box>
             <toolbarbutton id="unifinder-closer"
                            class="unifinder-closebutton close-icon"
@@ -262,80 +366,6 @@
                   class="chromeclass-extrachrome sidebar-splitter calendar-splitter"
                   orient="vertical"/>
 
-        <!-- Calendar Navigation Control Bar -->
-        <html:div id="calendarViewHeader"
-                  xmlns="http://www.w3.org/1999/xhtml">
-          <div class="navigation-inner-box" >
-            <!-- If you are extending a view, add attributes to these
-                  nodes for your view. i.e if your view has the id
-                  "foobar-view", then you need to add the attribute
-                  tooltiptext-foobar="..." -->
-            <div id="calendarControls">
-              <div class="button-group">
-                <button id="previousViewButton"
-                        class="button icon-button icon-only"
-                        onclick="goDoCommand('calendar_view_prev_command')"
-                        type="button">
-                </button>
-                <button id="todayViewButton"
-                        class="button icon-button icon-only"
-                        data-l10n-id="calendar-today-button-tooltip"
-                        onclick="currentView().moveView()"
-                        type="button">
-                </button>
-                <button id="nextViewButton"
-                        class="button icon-button icon-only"
-                        onclick="goDoCommand('calendar_view_next_command')"
-                        type="button">
-                </button>
-              </div>
-            </div>
-            <span id="intervalDescription" class="view-header"/>
-          </div>
-          <div class="navigation-inner-box">
-            <span id="calendarWeek" class="view-header"/>
-            <div id="viewToggle" role="tablist" class="calview-toggle">
-              <button id="calTabDay"
-                      class="calview-toggle-item"
-                      role="tab"
-                      value="day"
-                      tabindex="-1"
-                      aria-controls="day-view"
-                      aria-selected="false"
-                      data-l10n-id="calendar-view-toggle-day"></button>
-              <button id="calTabWeek"
-                      class="calview-toggle-item"
-                      role="tab"
-                      value="week"
-                      tabindex="0"
-                      aria-controls="week-view"
-                      aria-selected="true"
-                      data-l10n-id="calendar-view-toggle-week"></button>
-              <button id="calTabMultiweek"
-                      class="calview-toggle-item"
-                      role="tab"
-                      value="multiweek"
-                      tabindex="-1"
-                      aria-controls="multiweek-view"
-                      aria-selected="false"
-                      data-l10n-id="calendar-view-toggle-multiweek"></button>
-              <button id="calTabMonth"
-                      class="calview-toggle-item"
-                      role="tab"
-                      value="month"
-                      tabindex="-1"
-                      aria-controls="month-view"
-                      aria-selected="false"
-                      data-l10n-id="calendar-view-toggle-month"></button>
-            </div>
-            <button id="calendarControlBarMenu"
-                    class="button button-flat icon-button icon-only"
-                    onclick="showCalControlBarMenuPopup(event)"
-                    data-l10n-id="calendar-control-bar-menu-button"
-                    type="button">
-            </button>
-          </div>
-        </html:div>
         <vbox flex="1"
               id="view-box"
               persist="selectedIndex">
@@ -409,63 +439,61 @@
                 persist="height"
                 hidden="hidden">
             <hbox id="calendar-task-details">
-              <hbox id="other-actions-box">
-                <vbox id="task-actions-toolbox" class="inline-toolbox">
-                  <hbox id="task-actions-toolbar" class="themeable-brighttext" role="toolbar">
-                    <toolbarbutton id="task-actions-category"
-                                   type="menu"
-                                   wantdropmarker="true"
-                                   tabindex="0"
-                                   command="calendar_task_category_command"
-                                   class="toolbarbutton-1 message-header-view-button"
-                                   data-l10n-id="calendar-event-listing-column-category">
-                      <menupopup id="task-actions-category-popup"
-                                 onpopupshowing="taskDetailsView.loadCategories(event);"
-                                 onpopuphiding="return taskDetailsView.saveCategories(event);">
-                        <html:input id="task-actions-category-textbox"
-                                    placeholder="&event.categories.textbox.label;"
-                                    onblur="this.parentNode.removeAttribute(&quot;ignorekeys&quot;);"
-                                    onfocus="this.parentNode.setAttribute(&quot;ignorekeys&quot;, &quot;true&quot;);"
-                                    onkeypress="taskDetailsView.categoryTextboxKeypress(event);"/>
-                        <menuseparator/>
-                      </menupopup>
-                    </toolbarbutton>
-                    <toolbarbutton is="toolbarbutton-menu-button" id="task-actions-markcompleted"
-                                   type="menu"
-                                   tabindex="0"
-                                   data-l10n-id="calendar-task-mark-completed"
-                                   data-l10n-attrs="label accesskey tooltiptext"
-                                   command="calendar_toggle_completed_command"
-                                   class="toolbarbutton-1 message-header-view-button">
-                      <menupopup is="calendar-task-progress-menupopup" id="task-actions-markcompleted-menupopup"/>
-                    </toolbarbutton>
-                    <toolbarbutton id="task-actions-priority"
-                                   type="menu"
-                                   wantdropmarker="true"
-                                   tabindex="0"
-                                   data-l10n-id="calendar-task-change-priority"
-                                   data-l10n-attrs="label accesskey tooltiptext"
-                                   command="calendar_general-priority_command"
-                                   class="toolbarbutton-1 message-header-view-button">
-                      <menupopup is="calendar-task-priority-menupopup" id="task-actions-priority-menupopup"/>
-                    </toolbarbutton>
-                    <toolbarbutton id="calendar-delete-task-button"
-                                   class="toolbarbutton-1 message-header-view-button"
-                                   tabindex="0"
-                                   data-l10n-id="calendar-taskview-delete"
-                                   command="calendar_delete_todo_command"/>
-                  </hbox>
-                </vbox>
+              <hbox id="task-summary-header">
+                <html:div id="calendar-task-details-title-row" hidden="hidden">
+                  <html:h1 id="calendar-task-details-title"></html:h1>
+                </html:div>
+                <hbox id="other-actions-box">
+                  <vbox id="task-actions-toolbox" class="inline-toolbox">
+                    <hbox id="task-actions-toolbar" class="themeable-brighttext" role="toolbar">
+                      <toolbarbutton id="task-actions-category"
+                                     type="menu"
+                                     wantdropmarker="true"
+                                     tabindex="0"
+                                     command="calendar_task_category_command"
+                                     class="toolbarbutton-1 message-header-view-button"
+                                     data-l10n-id="calendar-event-listing-column-category">
+                        <menupopup id="task-actions-category-popup"
+                                   onpopupshowing="taskDetailsView.loadCategories(event);"
+                                   onpopuphiding="return taskDetailsView.saveCategories(event);">
+                          <html:input id="task-actions-category-textbox"
+                                      placeholder="&event.categories.textbox.label;"
+                                      onblur="this.parentNode.removeAttribute(&quot;ignorekeys&quot;);"
+                                      onfocus="this.parentNode.setAttribute(&quot;ignorekeys&quot;, &quot;true&quot;);"
+                                      onkeypress="taskDetailsView.categoryTextboxKeypress(event);"/>
+                          <menuseparator/>
+                        </menupopup>
+                      </toolbarbutton>
+                      <toolbarbutton is="toolbarbutton-menu-button" id="task-actions-markcompleted"
+                                     type="menu"
+                                     tabindex="0"
+                                     data-l10n-id="calendar-task-mark-completed"
+                                     data-l10n-attrs="label accesskey tooltiptext"
+                                     command="calendar_toggle_completed_command"
+                                     class="toolbarbutton-1 message-header-view-button">
+                        <menupopup is="calendar-task-progress-menupopup" id="task-actions-markcompleted-menupopup"/>
+                      </toolbarbutton>
+                      <toolbarbutton id="task-actions-priority"
+                                     type="menu"
+                                     wantdropmarker="true"
+                                     tabindex="0"
+                                     data-l10n-id="calendar-task-change-priority"
+                                     data-l10n-attrs="label accesskey tooltiptext"
+                                     command="calendar_general-priority_command"
+                                     class="toolbarbutton-1 message-header-view-button">
+                        <menupopup is="calendar-task-priority-menupopup" id="task-actions-priority-menupopup"/>
+                      </toolbarbutton>
+                      <toolbarbutton id="calendar-delete-task-button"
+                                     class="toolbarbutton-1 message-header-view-button"
+                                     tabindex="0"
+                                     data-l10n-id="calendar-taskview-delete"
+                                     command="calendar_delete_todo_command"/>
+                    </hbox>
+                  </vbox>
+                </hbox>
               </hbox>
-              <hbox id ="calendar-task-details-box">
+              <hbox id="calendar-task-details-box">
                 <html:table id="calendar-task-details-grid">
-                  <html:tr id="calendar-task-details-title-row"
-                           hidden="hidden">
-                    <html:th class="task-details-name" data-l10n-id="calendar-task-details-title"/>
-                    <html:td id="calendar-task-details-title"
-                             class="task-details-value">
-                    </html:td>
-                  </html:tr>
                   <html:tr id="calendar-task-details-priority-row"
                            hidden="hidden">
                     <html:th id="calendar-task-details-priority-label"

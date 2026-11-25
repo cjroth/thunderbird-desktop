@@ -75,6 +75,9 @@ add_task(async function testWeekView() {
   }, "event name did not update in time");
 
   Assert.equal(eventName, TITLE2);
+  const time = eventBox.querySelector(".event-time-range").textContent;
+  Assert.equal(time, cal.dtz.formatter.formatItemTimeInterval(eventBox.occurrence));
+  Assert.equal(eventBox.getAttribute("aria-description"), time);
 
   // Delete event.
   EventUtils.synthesizeMouseAtCenter(eventBox, {}, window);
@@ -162,13 +165,14 @@ add_task(async function testWeekViewDateLabel() {
   await CalendarTestUtils.goToDate(window, 2022, 4, 13);
 
   const heading = CalendarTestUtils.weekView.getColumnHeading(window, 7);
-  const labelSpan = heading.querySelector("span:not([hidden])");
+  const date = heading.querySelector(".day-column-number");
 
   await document.l10n.translateRoots();
+  Assert.equal(heading.ariaLabel, "Wednesday, April 13, 2022");
   Assert.equal(
-    labelSpan.textContent,
-    "Wed Apr 13",
-    "the date label should contain the displayed date in a human-readable string"
+    date.textContent,
+    "13",
+    "the date number should identify the day"
   );
 });
 
@@ -237,7 +241,7 @@ add_task(async function testWeekViewNavbar() {
   const calendarWeek = CalendarTestUtils.getNavBarCalendarWeekBox(window);
   Assert.equal(
     calendarWeek.textContent,
-    "CW: 14",
+    "Week 14",
     "calendar week label should contain the displayed week"
   );
 });

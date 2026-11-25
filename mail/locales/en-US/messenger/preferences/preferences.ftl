@@ -278,10 +278,19 @@ gloda-results-plain-list-label =
     .label = Show search results as a plain list
     .accesskey = L
 
-gloda-semantic-search-label =
-    .label = Rank email by meaning when I search with an English question
+gloda-machine-learning-label =
+    .label = Enable on-device machine learning
 
-gloda-semantic-search-description = Applies to search results sorted by relevance in the faceted view. Downloads about 45 MB on first use. Your email and search questions stay on this device.
+gloda-machine-learning-description = Allows { -brand-short-name } to run models on this device. Ranking search results downloads a model (about 45 MB) on first use. Your messages and questions stay on this device.
+
+gloda-semantic-search-label =
+    .label = Rank results by meaning for questions in English
+
+gloda-semantic-search-description = Applies when you sort search results by relevance.
+gloda-semantic-search-ml-off = Turn on on-device machine learning to use ranking.
+gloda-semantic-search-ml-locked = Your administrator has disabled on-device machine learning.
+gloda-semantic-search-indexer-off = Turn on search across all email accounts to use ranking.
+gloda-semantic-search-plain-list = Turn off plain-list results to use ranking.
 
 datetime-formatting-legend = Date and Time Formatting
 
@@ -330,10 +339,10 @@ hide-titlebar-label =
     .accesskey = H
 hide-titlebar-description = Removes the top bar showing the window name to save screen space
 
-hide-tabbar-single-tab-label =
-    .label = Hide the tab bar when only a single tab is open
+auto-hide-tabbar-label =
+    .label = Automatically hide the tab bar
     .accesskey = T
-auto-hide-tabbar-second-tab-description = Automatically hides tabs until you open a second tab.
+auto-hide-tabbar-spaces-description = Show tabs when you open a message, search results, or more than one tab in a space.
 
 system-settings-legend = System settings
 check-email-app-label =

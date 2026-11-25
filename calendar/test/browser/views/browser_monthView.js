@@ -348,7 +348,7 @@ add_task(async function testMonthViewNavbar() {
   const calendarWeek = CalendarTestUtils.getNavBarCalendarWeekBox(window);
   Assert.equal(
     calendarWeek.textContent,
-    "CWs: 13-17",
+    "Weeks 13–17",
     "calendar week label should contain the displayed weeks"
   );
 });

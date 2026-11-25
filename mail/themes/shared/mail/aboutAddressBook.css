@@ -19,9 +19,9 @@
   --ab-card-table-row-height: 22px;
   --ab-card-row-gap: 3px;
 
-  --ab-contact-padding: 21px;
-  --ab-contact-photo-size: 80px;
-  --ab-detail-section-padding: 15px;
+  --ab-contact-padding: clamp(18px, 2.6vw, 40px);
+  --ab-contact-photo-size: 68px;
+  --ab-detail-section-padding: clamp(15px, 1.5vw, 24px);
   --ab-detail-title-margin-block: 0 15px;
 
   --books-pane-icon-size: 16px;
@@ -81,12 +81,12 @@
 /* Page layout */
 
 body {
-  --ab-pane-min-width: 240px;
+  --ab-pane-min-width: clamp(160px, 17vw, 240px);
   --booksSplitter-width: var(--ab-pane-min-width);
   --sharedSplitter-height: 50%;
-  --ab-cards-pane-min-width: 340px;
+  --ab-cards-pane-min-width: clamp(225px, 26vw, 340px);
   --sharedSplitter-width: var(--ab-cards-pane-min-width);
-  --ab-details-pane-min-width: 500px;
+  --ab-details-pane-min-width: min(37vw, 420px);
 
   display: grid;
   grid-template:
@@ -119,8 +119,20 @@ body {
 
 /* Books pane Header. */
 
+.books-pane-title {
+  margin-block: calc(var(--space-base) + 14px) var(--space-base);
+  margin-inline: 16px;
+  font-family: var(--desk-font);
+  font-size: 1.05rem;
+  font-weight: 650;
+  line-height: 1.16;
+  overflow-wrap: anywhere;
+}
+
 #booksPaneHeaderBar {
   font-size: 1rem;
+  justify-content: start;
+  margin-block-end: var(--space-base);
 }
 
 #booksPaneCreateBook,
@@ -137,6 +149,9 @@ body {
 
 #booksPaneCreateContact {
   background-image: var(--books-pane-icon-new);
+  inline-size: 100%;
+  min-block-size: var(--button-height);
+  font-weight: 650;
 }
 
 #booksPaneCreateList {
@@ -161,8 +176,12 @@ body {
 
 .books-pane-bottom {
   display: flex;
-  justify-content: end;
-  margin-block-start: 6px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  border-block-start: 1px solid var(--sidebar-border);
+  padding-block: var(--space-base);
+  padding-inline: 10px;
 }
 
 #booksSplitter {
@@ -314,8 +333,18 @@ body {
 
 #cardsPaneHeader {
   display: flex;
-  margin: var(--sidebar-header-spacing);
+  margin: calc(var(--space-base) + 7px);
   align-items: center;
+}
+
+#contactsHeading {
+  margin-block: calc(14px + var(--space-base)) 0;
+  margin-inline: calc(8px + var(--space-base));
+  font-family: var(--desk-font);
+  font-size: 1.52rem;
+  font-weight: 660;
+  letter-spacing: -0.035em;
+  overflow-wrap: anywhere;
 }
 
 #searchInput {
@@ -564,7 +593,7 @@ body:not(.is-editing) #editContactForm {
   grid-template: "photo headings" auto / auto 1fr;
   align-items: center;
   gap: 1em;
-  margin-block-end: 15px;
+  margin-block-end: calc(var(--space-base) + 17px);
 }
 
 #photoInput {
@@ -637,8 +666,11 @@ body:not(.is-editing) #editContactForm {
 }
 
 .contact-heading-name {
-  font-size: 1.6rem;
-  font-weight: 400;
+  font-family: var(--desk-font);
+  font-size: clamp(1.7rem, 2.6vw, 2.65rem);
+  font-weight: 660;
+  letter-spacing: -0.045em;
+  line-height: 1.12;
 }
 
 .contact-heading-nickname {
@@ -646,7 +678,8 @@ body:not(.is-editing) #editContactForm {
   color: var(--in-content-deemphasized-text);
 }
 
-.contact-heading-email {
+.contact-heading-email,
+.contact-heading-affiliation {
   margin-block: 0;
   font-size: 1.1rem;
   font-weight: 400;
@@ -668,7 +701,7 @@ body:not(.is-editing) #editContactForm {
 #detailsBody {
   display: grid;
   display: grid-lanes;
-  grid-template-columns: repeat(auto-fill, minmax(31.5em, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 24em), 1fr));
   gap: 1em;
 
   & section {
@@ -682,9 +715,116 @@ body:not(.is-editing) #editContactForm {
 
   & h2 {
     margin-block: var(--ab-detail-title-margin-block);
-    font-size: 1.1rem;
+    font-size: 1.15rem;
     line-height: 1.2;
-    font-weight: 500;
+    font-weight: 650;
+  }
+}
+
+#viewContactInitials {
+  grid-area: photo;
+  --recipient-avatar-size: var(--ab-contact-photo-size);
+  margin: 0;
+  font-family: var(--desk-font);
+  font-size: calc(var(--ab-contact-photo-size) * 0.35);
+  font-weight: 650;
+  letter-spacing: -0.035em;
+}
+
+#viewContactInitials[hidden],
+#viewContactPhoto[hidden] {
+  display: none;
+}
+
+@media (prefers-contrast: no-preference) {
+  #cardsPane,
+  #cards,
+  #detailsPane {
+    background-color: var(--desk-surface);
+  }
+
+  #viewContactInitials {
+    color: var(--desk-accent);
+    background-color: var(--desk-accent-soft);
+    box-shadow: none;
+  }
+
+  #cards .card-layout contact-avatar {
+    --recipient-avatar-size: 34px;
+    border-radius: 10px;
+    box-shadow: none;
+    background: var(--desk-canvas);
+    color: var(--desk-muted);
+    font-size: 0.91rem;
+    font-weight: 650;
+  }
+
+  #cards .card-layout.selected contact-avatar {
+    background: var(--desk-surface);
+    color: var(--desk-accent);
+  }
+
+  #cards .card-layout > td {
+    padding: 0;
+  }
+
+  #cards .card-layout .card-container {
+    padding-inline: 9px;
+    border: 0;
+    border-block-end: 1px solid var(--desk-line);
+    border-radius: 0;
+    background-color: var(--desk-surface);
+  }
+
+  #cards .card-layout:is(:hover, .current) .card-container {
+    background-color: var(--desk-canvas);
+  }
+
+  #cards .card-layout.selected .card-container {
+    background-color: var(--desk-accent-soft);
+    box-shadow: inset 3px 0 var(--desk-accent);
+
+    &:dir(rtl) {
+      box-shadow: inset -3px 0 var(--desk-accent);
+    }
+  }
+
+
+  #detailsBody {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  #detailsBody section {
+    background: transparent;
+    border: 0;
+    border-block-start: 1px solid var(--desk-line);
+    border-radius: 0;
+    padding-block: calc(10px + var(--space-base));
+    padding-inline: 0;
+  }
+
+  #detailsBody h2 {
+    color: var(--desk-muted);
+    font-size: 0.9rem;
+    margin-block: 0 0.7em;
+    font-weight: 600;
+  }
+
+  #detailsBody #detailsActions {
+    border: 0;
+    padding-block: 0 calc(12px + var(--space-base));
+  }
+
+  #detailsWriteButton {
+    color: var(--desk-on-accent);
+    background-color: var(--desk-accent);
+  }
+
+  .contact-photo {
+    background-color: var(--desk-accent-soft);
+    stroke: var(--desk-accent);
   }
 }
 

@@ -5,9 +5,10 @@
 @namespace html url("http://www.w3.org/1999/xhtml");
 
 #chatTabPanel {
-  --imbox-selected-text-color: FieldText;
-  --imbox-selected-background-color: Field;
-  --imgroup-selected-background-color: ThreeDLightShadow;
+  --imbox-selected-text-color: var(--desk-ink);
+  --imbox-selected-background-color: var(--desk-accent-soft);
+  --imgroup-selected-background-color: var(--desk-accent-soft);
+  font-family: var(--desk-font);
   overflow: hidden;
 
   :root[lwt-tree-brighttext] & {
@@ -16,9 +17,39 @@
   }
 }
 
+/* The empty workspace has a single destination until an account exists. */
+#chatTabPanel:has(#noConvScreen:not([hidden]) #noAccountInnerBox:not([hidden])) {
+  & :is(#chat-view-toolbox, #listPaneBox, #listSplitter) {
+    display: none;
+  }
+
+  & .im-placeholder-button-box {
+    margin-block-start: 15px;
+
+    & spacer {
+      display: none;
+    }
+  }
+
+  & #openIMAccountWizardButton {
+    appearance: none;
+    color: var(--desk-on-accent);
+    background: var(--desk-accent);
+    border: 1px solid transparent;
+    border-radius: 7px;
+    font-weight: 600;
+    margin-inline: 0;
+    min-block-size: 34px;
+
+    &:hover {
+      background: var(--color-primary-hover);
+    }
+  }
+}
+
 .im-placeholder-screen {
-  color: FieldText;
-  background-color: Field;
+  color: var(--desk-ink);
+  background-color: var(--desk-canvas);
   overflow: auto;
   font-size: 15px;
   font-weight: normal;
@@ -30,36 +61,31 @@
 }
 
 .im-placeholder-box {
-  max-inline-size: calc(500px + 9em);
+  max-inline-size: 35rem;
   min-block-size: 3em;
-  background: url("chrome://global/skin/icons/info.svg") left 0 no-repeat;
-  -moz-context-properties: fill;
-  fill: currentColor;
-  background-size: 3em;
-  margin-inline: 0.5em;
-  padding-inline: 4.5em;
-
-  &:-moz-locale-dir(rtl) {
-    background-position-x: right;
-  }
-}
-
-.im-placeholder-innerbox {
-  opacity: 0.8;
+  margin: 1.5rem;
+  padding: clamp(1.5rem, 4vw, 3.25rem);
+  border: 1px solid var(--desk-line);
+  border-radius: 16px;
+  box-shadow: 0 8px 25px light-dark(rgb(24 32 52 / 5%), rgb(0 0 0 / 12%));
+  background: var(--desk-surface);
 }
 
 .im-placeholder-title {
-  font-size: 2em;
-  font-weight: lighter;
+  font-family: var(--desk-font);
+  font-size: 1.85rem;
+  font-weight: 650;
+  letter-spacing: -0.035em;
   line-height: 1.2;
   margin: 0;
   margin-block-end: 0.5em;
-  padding-block-end: 0.4em;
-  border-block-end: 1px solid var(--sidebar-border);
+
 }
 
 .im-placeholder-desc {
   margin-inline: 0;
+  color: var(--desk-muted);
+  line-height: 1.55;
 }
 
 #noPreviousConvDesc {
@@ -82,6 +108,7 @@
 }
 
 #listPaneBox {
+  background-color: var(--desk-sidebar);
   border-inline-end: 1px solid var(--sidebar-border);
 
   :root[lwt-tree] & {
@@ -165,7 +192,7 @@ richlistitem[is="chat-imconv-richlistitem"][unread] {
 }
 
 richlistitem[is="chat-imconv-richlistitem"][attention] {
-  color: blue;
+  color: var(--desk-accent);
 }
 
 richlistitem[is="chat-imconv-richlistitem"],

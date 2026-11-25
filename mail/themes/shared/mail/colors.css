@@ -78,13 +78,13 @@
    * Bolt Colors
    * https://bolt.thunderbird.net/8b179dbfd/p/61e4c7-color
    */
-  --color-surface-base-light: #fcfcfd;
+  --color-surface-base-light: #f5f6fa;
   --color-surface-raised-light: #ffffff;
-  --color-surface-subtle-light: #efeff1;
-  --color-surface-lower-light: #f7f7f8;
-  --color-surface-deep-light: #e4e4e7;
-  --color-surface-border-light: #d9d9de;
-  --color-surface-border-intense-light: #a1a1aa;
+  --color-surface-subtle-light: #eef1f6;
+  --color-surface-lower-light: #f2f4f8;
+  --color-surface-deep-light: #e4e8ef;
+  --color-surface-border-light: #dce1e9;
+  --color-surface-border-intense-light: #959fb1;
   --color-primary-soft-light: #f0f8ff;
   --color-primary-default-light: #1373d9;
   --color-primary-hover-light: #175fb6;
@@ -105,30 +105,30 @@
   --color-critical-hover-light: #7f1d1d;
   --color-critical-default-light: #991b1b;
   --color-critical-pressed-light: #450a0a;
-  --color-text-base-light: #18181b;
-  --color-text-base-inverted-light: #fcfcfd;
-  --color-text-secondary-light: #52525b;
-  --color-text-muted-light: #71717a;
+  --color-text-base-light: #182034;
+  --color-text-base-inverted-light: #ffffff;
+  --color-text-secondary-light: #414d63;
+  --color-text-muted-light: #58677d;
   --color-text-brand-light: #0b5cbd;
   --color-text-highlight-light: #1373d9;
   --color-text-warning-light: #713f12;
   --color-text-critical-light: #b91c1c;
   --color-text-success-light: #1c5f32;
   --color-text-disabled-light: #a1a1aa;
-  --color-accent-teal-light: #25a6a0;
+  --color-accent-teal-light: #197870;
   --color-accent-blue-light: #58c9ff;
   --color-accent-purple-light: #ae55f7;
   --color-accent-orange-light: #ea7308;
   --color-accent-pink-light: #e247c4;
   --color-accent-ink-light: #6e6f9b;
 
-  --color-surface-base-dark: #18181b;
-  --color-surface-raised-dark: #2b2b2f;
-  --color-surface-subtle-dark: #232326;
-  --color-surface-deep-dark: #3f3f46;
-  --color-surface-border-dark: #52525b;
-  --color-surface-border-intense-dark: #71717a;
-  --color-surface-lower-dark: #111113;
+  --color-surface-base-dark: #131721;
+  --color-surface-raised-dark: #1c2230;
+  --color-surface-subtle-dark: #242c3b;
+  --color-surface-deep-dark: #30394b;
+  --color-surface-border-dark: #323b4d;
+  --color-surface-border-intense-dark: #69758c;
+  --color-surface-lower-dark: #171c28;
   --color-primary-soft-dark: #262c40;
   --color-primary-default-dark: #58c9ff;
   --color-primary-hover-dark: #32aeff;
@@ -149,10 +149,10 @@
   --color-critical-hover-dark: #f87171;
   --color-critical-default-dark: #fca5a5;
   --color-critical-pressed-dark: #f05252;
-  --color-text-base-dark: #f7f7f8;
-  --color-text-base-inverted-dark: #18181b;
-  --color-text-secondary-dark: #d4d4d8;
-  --color-text-muted-dark: #a1a1aa;
+  --color-text-base-dark: #eef1fa;
+  --color-text-base-inverted-dark: #141b37;
+  --color-text-secondary-dark: #c6cfe2;
+  --color-text-muted-dark: #a2aec5;
   --color-text-brand-dark: #32aeff;
   --color-text-highlight-dark: #58c9ff;
   --color-text-warning-dark: #fee78a;
@@ -209,4 +209,30 @@
   --color-accent-orange: light-dark(var(--color-accent-orange-light), var(--color-accent-orange-dark));
   --color-accent-pink: light-dark(var(--color-accent-pink-light), var(--color-accent-pink-dark));
   --color-accent-ink: light-dark(var(--color-accent-ink-light), var(--color-accent-ink-dark));
+
+  /* Use the deeper Bolt text blue on lightly tinted navigation and badges. */
+  --thunderbird-accent-color: light-dark(var(--color-text-brand-light), var(--color-primary-default-dark));
+  --desk-font: system-ui, sans-serif;
+  --desk-display: Georgia, "Noto Serif", serif;
+  --desk-canvas: var(--color-surface-base);
+  --desk-surface: var(--color-surface-raised);
+  --desk-sidebar: var(--color-surface-lower);
+  --desk-ink: var(--color-text-base);
+  --desk-muted: var(--color-text-muted);
+  --desk-line: var(--color-surface-border);
+  --desk-accent: var(--selected-item-color, var(--thunderbird-accent-color));
+  --desk-on-accent: var(--selected-item-text-color, var(--color-text-base-inverted));
+  --desk-accent-soft: color-mix(in srgb, var(--desk-accent) 12%, var(--desk-surface));
+
+  @media (forced-colors: active), (prefers-contrast: more) {
+    --desk-canvas: Canvas;
+    --desk-surface: Canvas;
+    --desk-sidebar: Canvas;
+    --desk-ink: CanvasText;
+    --desk-muted: CanvasText;
+    --desk-line: ButtonBorder;
+    --desk-accent: Highlight;
+    --desk-on-accent: HighlightText;
+    --desk-accent-soft: Canvas;
+  }
 }

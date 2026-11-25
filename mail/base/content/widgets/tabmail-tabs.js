@@ -403,11 +403,6 @@
       this.mTabClipWidth = Services.prefs.getIntPref("mail.tabs.tabClipWidth");
       this.mAutoHide = Services.prefs.getBoolPref("mail.tabs.autoHide");
 
-      if (this.mAutoHide) {
-        this.mCollapseToolbar.collapsed = true;
-        document.documentElement.setAttribute("tabbarhidden", "true");
-      }
-
       this._updateCloseButtons();
 
       Services.prefs.addObserver("mail.tabs.", this._prefObserver);
@@ -495,16 +490,30 @@
     }
 
     set mAutoHide(val) {
-      if (val != this._mAutoHide) {
-        if (this.allTabs.length == 1) {
-          this.mCollapseToolbar.collapsed = val;
-        }
-        this._mAutoHide = val;
-      }
+      this._mAutoHide = val;
+      this.updateToolbarVisibility();
     }
 
     get mAutoHide() {
       return this._mAutoHide;
+    }
+
+    /**
+     * Show a tab strip when an open document needs its own navigation, or
+     * when the user prefers to keep tabs visible.
+     */
+    updateToolbarVisibility() {
+      const collapsed =
+        this.mAutoHide &&
+        (this.allTabs.length <= 1 ||
+          window.gSpacesToolbar?.canNavigateAllTabs(this.tabmail.tabInfo) === true);
+      this.mCollapseToolbar.collapsed = collapsed;
+      if (collapsed) {
+        document.documentElement.setAttribute("tabbarhidden", "true");
+      } else {
+        document.documentElement.removeAttribute("tabbarhidden");
+        this._updateCloseButtons();
+      }
     }
 
     set selectedIndex(val) {

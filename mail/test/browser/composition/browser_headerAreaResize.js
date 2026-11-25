@@ -57,6 +57,34 @@ add_task(async function test_tabBetweenSubjectAndBody() {
   }
 });
 
+add_task(async function test_focusWritingKeepsDraft() {
+  const win = await open_compose_new_mail();
+  try {
+    const doc = win.document;
+    const focus = doc.getElementById("composeFocusButton");
+    const subject = doc.getElementById("msgSubject");
+    const editor = doc.getElementById("messageEditor");
+    const recipients = doc.getElementById("recipientsContainer");
+    subject.value = "Review tomorrow";
+    const content = editor.contentDocument.body.innerHTML;
+
+    focus.click();
+    Assert.equal(focus.ariaPressed, "true");
+    Assert.ok(BrowserTestUtils.isHidden(recipients));
+    Assert.ok(BrowserTestUtils.isHidden(doc.getElementById("composeToolbar2")));
+    Assert.equal(doc.l10n.getAttributes(focus).id, "compose-exit-focus-button");
+    Assert.equal(doc.activeElement, editor);
+    focus.click();
+    Assert.equal(focus.ariaPressed, "false");
+    Assert.ok(BrowserTestUtils.isVisible(recipients));
+    Assert.ok(BrowserTestUtils.isVisible(doc.getElementById("composeToolbar2")));
+    Assert.equal(subject.value, "Review tomorrow");
+    Assert.equal(editor.contentDocument.body.innerHTML, content);
+  } finally {
+    await close_compose_window(win);
+  }
+});
+
 add_task(async function test_resizeHeaderArea() {
   const win = await open_compose_new_mail();
   registerCleanupFunction(async () => {

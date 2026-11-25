@@ -28,6 +28,29 @@ add_task(async function test_default_contents() {
   checkToolbarContents("mail");
 });
 
+add_task(async function test_app_menu_anchor() {
+  const button = document.getElementById("button-appmenu");
+  const panel = document.getElementById("appMenu-popup");
+  const showWithMouse = () =>
+    EventUtils.synthesizeMouseAtCenter(button.badgeStack, {}, window);
+  const showWithKeyboard = () => {
+    button.focus();
+    EventUtils.synthesizeKey("KEY_Enter", {}, window);
+  };
+
+  for (const show of [showWithMouse, showWithKeyboard]) {
+    const shown = BrowserTestUtils.waitForPopupEvent(panel, "shown");
+    show();
+    await shown;
+    Assert.equal(panel.anchorNode, button, "Anchor to the whole brand button");
+    Assert.equal(panel.getAttribute("position"), "after_start");
+
+    const hidden = BrowserTestUtils.waitForPopupEvent(panel, "hidden");
+    EventUtils.synthesizeKey("KEY_Escape", {}, window);
+    await hidden;
+  }
+});
+
 add_task(async function test_customized_contents() {
   await setState({
     mail: ["get-messages", "spacer", "throbber"],

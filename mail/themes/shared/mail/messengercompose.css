@@ -311,11 +311,13 @@
   }
 }
 
-#composeToolbar2 {
-  padding-inline: 3px;
+#compose-toolbox > #composeToolbar2 {
+  padding-inline: clamp(12px, 2vw, 24px);
 }
 
 #composeContentBox {
+  --compose-gutter: clamp(8px, 3.8vw, 48px);
+  --compose-measure: 52rem;
   /* In order to remove the shadow border on left/right edges elegantly, use
    * left/right margins of -3px. We make up for this by adding 3px of padding
    * instead. */
@@ -324,11 +326,12 @@
   display: grid;
   grid-template:
     "contacts contacts-splitter headers" minmax(auto, var(--headersSplitter-height))
-    "contacts contacts-splitter format-toolbar" min-content
     "contacts contacts-splitter headers-splitter" min-content
     "contacts contacts-splitter message" minmax(33%, 1fr)
     "contacts contacts-splitter attachment-splitter" min-content
     "contacts contacts-splitter attachment-area" min-content
+    "contacts contacts-splitter format-toolbar" min-content
+    "contacts contacts-splitter writing-tools" min-content
     / minmax(auto, var(--contactsSplitter-width)) min-content minmax(auto, 1fr);
   /* If the splitter is not used, the header and attachment areas will try and
    * grow to their content size. */
@@ -464,8 +467,13 @@
   grid-area: headers;
   display: grid;
   grid-template-rows: min-content minmax(0, min-content) min-content;
-  grid-template-columns: auto fit-content(11.5rem) minmax(0, 1fr);
+  grid-template-columns: auto fit-content(9rem) minmax(0, 1fr);
   color-scheme: light dark;
+  inline-size: min(calc(100% - 2 * var(--compose-gutter)), var(--compose-measure));
+  justify-self: center;
+  box-sizing: border-box;
+  padding-inline: 0;
+  padding-block-end: var(--space-base, 6px);
 }
 
 #top-gradient-box,
@@ -479,6 +487,63 @@
 
 #FormatToolbox {
   grid-area: format-toolbar;
+  padding-inline: var(--compose-gutter);
+  border-block-start: 1px solid var(--desk-line);
+}
+
+.writing-tools {
+  grid-area: writing-tools;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-block-size: calc(32px + 2 * var(--space-base, 6px));
+  --button-margin: 0;
+  gap: 8px;
+  padding-inline: var(--compose-gutter);
+  background-color: var(--desk-surface);
+  border-block-start: 1px solid var(--desk-line);
+}
+
+#FormatToolbox:has(> #FormatToolbar[hidden]) {
+  display: none;
+}
+
+#composeFormattingButton {
+  background-image: var(--icon-pencil);
+}
+
+#composeFocusButton {
+  margin-inline-start: auto;
+  background-image: var(--icon-layout);
+}
+
+#compose-toolbox:has(+ #composeContentBox[data-focus-writing])
+  > :is(#composeToolbar2, #compose-toolbar-menubar2) {
+  display: none;
+}
+
+#composeContentBox[data-focus-writing] {
+  --headersSplitter-height: min-content;
+  --contactsSplitter-width: 0px;
+
+  & :is(#contactsSidebar, #contactsSplitter, #top-gradient-box, #recipientsContainer,
+      #FormatToolbox, #composeFormattingButton, #headersSplitter) {
+    display: none;
+  }
+
+  & #MsgHeadersToolbar {
+    padding-block-start: clamp(20px, 6vh, 66px);
+    grid-template-rows: min-content;
+  }
+
+  & #subject-box {
+    border-block-start-color: transparent;
+  }
+
+  & #composeFocusButton {
+    color: var(--desk-accent);
+    background-color: var(--desk-accent-soft);
+  }
 }
 
 #headersSplitter {
@@ -498,16 +563,131 @@
 #messageEditor {
   flex: 1 1 0;
   min-block-size: 0;
+  align-self: center;
+  inline-size: min(calc(100% - 2 * var(--compose-gutter)), var(--compose-measure));
+  margin-block: var(--space-base, 6px);
 }
 
 #FindToolbar {
   flex: 0 0 auto;
 }
 
+@media (prefers-contrast: no-preference) {
+  #composeContentBox #MsgHeadersToolbar {
+    color: var(--desk-ink);
+    background-color: var(--desk-surface);
+    padding-block-start: clamp(12px, 2.8vh, 28px);
+  }
+
+  #composeContentBox,
+  #messageArea {
+    background-color: var(--desk-surface);
+    box-shadow: none;
+  }
+
+  #FormatToolbox {
+    background-color: var(--desk-canvas);
+  }
+
+  #subject-box {
+    display: flex;
+    align-items: baseline;
+    padding-block-start: calc(10px + var(--space-base, 6px));
+    border-block-start: 1px solid var(--desk-line);
+    margin-block-start: var(--space-base, 6px);
+  }
+
+  #subject-box > .aw-firstColBox,
+  #subjectLabel-box {
+    position: absolute;
+    clip-path: inset(100%);
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+  }
+
+  #msgSubjectContainer,
+  #msgSubjectBox {
+    min-inline-size: 0;
+    inline-size: 100%;
+  }
+
+  #MsgHeadersToolbar #msgSubject {
+    margin: 0;
+    padding-block: 0.2em;
+    padding-inline: 0.16em;
+    border: 0;
+    font-family: var(--desk-font);
+    font-size: clamp(1.6rem, 3.2vw, 2.2rem);
+    font-weight: 650;
+    letter-spacing: -0.035em;
+    background-color: var(--desk-surface);
+    color: var(--desk-ink);
+
+    &.with-icon {
+      padding-inline-start: 30px;
+    }
+  }
+
+  #MsgHeadersToolbar :is(#identityLabel-box, .address-label-container) {
+    justify-content: start;
+    padding-inline-end: 12px;
+  }
+
+  #MsgHeadersToolbar .aw-firstColBox {
+    inline-size: 0;
+    padding-inline: 0;
+    position: relative;
+
+    & > * {
+      position: absolute;
+      inset-inline-end: 4px;
+    }
+  }
+
+  .address-container:not([focused="true"]) {
+    border-color: transparent;
+    background-color: var(--desk-surface);
+    color: var(--desk-ink);
+  }
+
+  .address-pill:not(.invalid-address, .key-issue, .editing, [selected]) {
+    background-color: var(--desk-canvas);
+    color: var(--desk-ink);
+  }
+
+  #identityLabel,
+  #subjectLabel,
+  .address-label-container label {
+    color: var(--desk-muted);
+    font-weight: 500;
+  }
+}
+
 /* :::: primary toolbar buttons :::: */
 
 #button-send {
   list-style-image: var(--icon-sent);
+
+  #composeToolbar2 & {
+    border-radius: var(--button-border-radius);
+    padding-inline: 1em;
+    margin-inline: 0.35em;
+    min-block-size: 32px;
+    font-weight: 650;
+
+    @media (prefers-contrast: no-preference) {
+      color: var(--desk-on-accent);
+      background-color: var(--desk-accent);
+      stroke: currentColor;
+      fill: color-mix(in srgb, currentColor 12%, transparent);
+      border-color: transparent;
+
+      &:hover:not([disabled]) {
+        background-color: color-mix(in srgb, var(--desk-accent) 85%, var(--desk-ink));
+      }
+    }
+  }
 }
 
 #button-contacts {
@@ -936,8 +1116,12 @@ toolbarbutton.formatting-button {
   background-color: Field;
   border: 1px solid var(--toolbarbutton-hover-bordercolor);
   border-radius: var(--button-border-radius);
-  padding-block: 0;
-  padding-inline: 4px 2px;
+  padding-block: 0.2em;
+  padding-inline: 0.4em;
+  font-family: var(--desk-display);
+  font-size: clamp(1.25rem, 2.25vw, 1.8rem);
+  font-weight: 500;
+  line-height: 1.25;
   transition:
     border 0.2s,
     box-shadow 0.2s;

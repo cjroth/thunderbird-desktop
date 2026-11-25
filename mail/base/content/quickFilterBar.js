@@ -56,6 +56,12 @@ var quickFilterBar = {
   async init() {
     await window.customElements.whenDefined("search-bar");
     this._bindUI();
+    this.scopeButtons = document.querySelectorAll("[data-mail-scope]");
+    for (const button of this.scopeButtons) {
+      button.addEventListener("click", () =>
+        this.selectMessageScope(button.dataset.mailScope)
+      );
+    }
     this.updateRovingTab();
 
     // Hide the toolbar, unless it has been previously shown.
@@ -78,7 +84,7 @@ var quickFilterBar = {
       }
     });
     commandController.registerCallback("cmd_resetQuickFilterBar", () => {
-      if (this.filterer.visible) {
+      if (this.filterer.visible || this.hasStatusConstraint) {
         this._resetFilterState();
       }
     });
@@ -93,7 +99,10 @@ var quickFilterBar = {
       top.goUpdateCommand(command);
     }
     window.addEventListener("keydown", event => {
-      if (event.keyCode != KeyEvent.DOM_VK_ESCAPE || !this.filterer.visible) {
+      if (
+        event.keyCode != KeyEvent.DOM_VK_ESCAPE ||
+        (!this.filterer.visible && !this.hasStatusConstraint)
+      ) {
         // The filter bar isn't visible, do nothing.
         return;
       }
@@ -128,6 +137,27 @@ var quickFilterBar = {
         stickyValue
       );
     });
+  },
+
+  get hasStatusConstraint() {
+    const { filterValues } = this.filterer;
+    return "unread" in filterValues || "starred" in filterValues;
+  },
+
+  /**
+   * Change the status constraint while preserving the text search, tags and
+   * other native filters a user has already applied.
+   *
+   * @param {"all"|"unread"|"starred"} scope - Selected status.
+   */
+  selectMessageScope(scope) {
+    for (const name of ["unread", "starred"]) {
+      const value = scope === name ? true : null;
+      this.filterer.setFilterValue(name, value);
+      this.updateFiltersSettings(name, value);
+    }
+    this.reflectFiltererState();
+    this.deferredUpdateSearch();
   },
 
   /**
@@ -419,6 +449,14 @@ var quickFilterBar = {
    *   name it.
    */
   reflectFiltererState(aFilterName) {
+    for (const button of this.scopeButtons || []) {
+      const scope = button.dataset.mailScope;
+      const pressed =
+        scope === "all"
+          ? !this.hasStatusConstraint
+          : this.filterer.filterValues[scope] === true;
+      button.setAttribute("aria-pressed", String(pressed));
+    }
     // If we aren't visible then there is no need to update the widgets.
     if (this.filterer.visible) {
       const filterValues = this.filterer.filterValues;

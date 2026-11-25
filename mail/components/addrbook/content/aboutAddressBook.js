@@ -445,14 +445,18 @@ async function updateAddressBookCount() {
   }
 
   const cardCount = document.getElementById("cardCount");
+  const heading = document.getElementById("contactsHeading");
   const { rowCount: count, directory } = cardsPane.cardsList.view;
 
   if (directory) {
+    heading.removeAttribute("data-l10n-id");
+    heading.textContent = directory.dirName;
     document.l10n.setAttributes(cardCount, "about-addressbook-card-count", {
       name: directory.dirName,
       count,
     });
   } else {
+    document.l10n.setAttributes(heading, "about-addressbook-contacts-heading");
     document.l10n.setAttributes(cardCount, "about-addressbook-card-count-all", {
       count,
     });
@@ -3082,9 +3086,13 @@ var detailsPane = {
     this.currentCard = card;
 
     this.fillContactDetails(document.getElementById("viewContact"), card);
-    document.getElementById("viewContactPhoto").hidden = document.querySelector(
-      "#viewContact .contact-headings"
-    ).hidden = false;
+    const initials = document.getElementById("viewContactInitials");
+    initials.hidden = !!card.photoURL;
+    if (!initials.hidden) {
+      initials.setData({ card });
+    }
+    document.getElementById("viewContactPhoto").hidden = !initials.hidden;
+    document.querySelector("#viewContact .contact-headings").hidden = false;
     document.querySelector("#viewContact .contact-header").hidden = false;
 
     this.writeButton.hidden = this.searchButton.hidden = !card.primaryEmail;
@@ -3153,8 +3161,10 @@ var detailsPane = {
     const nicknameValue = vCardProperties.getFirstValue("nickname");
     nickname.hidden = !nicknameValue;
     nickname.textContent = nicknameValue;
-    element.querySelector(".contact-heading-email").textContent =
-      card.primaryEmail;
+    const printEmail = element.querySelector(".contact-heading-email");
+    if (printEmail) {
+      printEmail.textContent = card.primaryEmail;
+    }
 
     const template = document.getElementById("entryItem");
     const createEntryItem = function (name) {
@@ -3356,7 +3366,14 @@ var detailsPane = {
     }
 
     const title = vCardProperties.getFirstValue("title");
-    if (title) {
+    const org = vCardProperties.getFirstValue("org");
+    const affiliation = element.querySelector(".contact-heading-affiliation");
+    if (affiliation) {
+      const parts = [title, ...(Array.isArray(org) ? org.filter(Boolean).reverse() : [org])];
+      affiliation.textContent = parts.filter(Boolean).join(" · ");
+      affiliation.hidden = !affiliation.textContent;
+    }
+    if (title && !affiliation) {
       const li = list.appendChild(createEntryItem("title"));
       li.querySelector(".entry-value").textContent = title;
     }
@@ -3367,8 +3384,7 @@ var detailsPane = {
       li.querySelector(".entry-value").textContent = role;
     }
 
-    const org = vCardProperties.getFirstValue("org");
-    if (Array.isArray(org)) {
+    if (!affiliation && Array.isArray(org)) {
       const li = list.appendChild(createEntryItem("organization"));
       const span = li.querySelector(".entry-value");
       for (const part of org.filter(Boolean).reverse()) {
@@ -3377,7 +3393,7 @@ var detailsPane = {
         }
         span.appendChild(document.createTextNode(part));
       }
-    } else if (org) {
+    } else if (!affiliation && org) {
       const li = list.appendChild(createEntryItem("organization"));
       li.querySelector(".entry-value").textContent = org;
     }

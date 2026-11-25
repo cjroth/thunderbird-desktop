@@ -58,7 +58,7 @@ const POLICIES_TESTS = [
     policies: { DisableCommunity: false },
     unlockedPrefs: {
       "mail.community_features.enabled": true,
-      "mailnews.start_page.enabled": true,
+      "mailnews.start_page.enabled": false,
       "mail.accounthub.thundermail.enabled": true,
     },
   },

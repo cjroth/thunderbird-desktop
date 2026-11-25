@@ -426,6 +426,8 @@ var FacetContext = {
         return;
       }
       this._sortBy = val;
+      const status = document.getElementById("semantic-search-status");
+      status.hidden = val != "-dascore" || !status.dataset.state;
       this.build(this._sieveAll());
       if (
         val == "-dascore" &&
@@ -539,7 +541,7 @@ var FacetContext = {
     this._semanticRanking = controller;
     const status = document.getElementById("semantic-search-status");
     const setStatus = state => {
-      status.hidden = false;
+      status.hidden = this.sortBy != "-dascore";
       status.dataset.state = state;
       document.l10n.setAttributes(status, "gloda-semantic-" + state);
     };
@@ -576,7 +578,7 @@ var FacetContext = {
       );
       if (this.sortBy == "-dascore") {
         this._activeSet = this._sieveAll();
-        this._showResults();
+        document.getElementById("results").reorderMessages(this.activeSet);
       }
       setStatus("ranked");
     } catch {
@@ -1174,6 +1176,11 @@ var FacetContext = {
  *  differ.  Anywho, this works for now and is a delightful reference to boot.
  */
 function reachOutAndTouchFrame() {
+  const { UIDensity } = ChromeUtils.importESModule("resource:///modules/UIDensity.sys.mjs");
+  const { UIFontSize } = ChromeUtils.importESModule("resource:///modules/UIFontSize.sys.mjs");
+  UIDensity.registerWindow(window);
+  UIFontSize.registerWindow(window);
+
   const us = window
     .getInterface(Ci.nsIWebNavigation)
     .QueryInterface(Ci.nsIDocShellTreeItem);

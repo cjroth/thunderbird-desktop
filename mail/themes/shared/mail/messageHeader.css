@@ -65,7 +65,130 @@
 }
 
 .message-header-container {
-  padding: 3px;
+  --reader-gutter: clamp(16px, 5.5vw, 46px);
+  --reader-block-gap: 18px;
+  --toolbarbutton-header-bordercolor: transparent;
+  padding: 0 var(--reader-gutter) var(--reader-block-gap);
+  row-gap: 5px;
+
+  :root[uidensity="compact"] & {
+    --reader-block-gap: 6px;
+  }
+
+  :root[uidensity="touch"] & {
+    --reader-block-gap: 16px;
+  }
+
+  /* Let the existing action toolbar, subject and sender occupy consecutive
+     rows. Recipient and extension-provided headers keep their source order. */
+  & #headerSenderToolbarContainer {
+    display: contents;
+  }
+
+  & #header-view-toolbox {
+    grid-row: 1;
+    justify-content: start;
+    align-self: stretch;
+    margin-inline: calc(0px - var(--reader-gutter));
+    padding: 10px clamp(10px, 3vw, 22px);
+    border-block-end: 1px solid var(--desk-line, var(--layout-border-0));
+  }
+
+  & #header-view-toolbar {
+    justify-content: start;
+    inline-size: 100%;
+    align-items: center;
+    gap: 4px;
+  }
+
+  & #headerSubjectSecurityContainer {
+    grid-row: 2;
+    padding-block: var(--reader-block-gap) 5px;
+    min-inline-size: 0;
+  }
+
+  & #expandedfromRow {
+    grid-row: 3;
+    margin-block-start: 5px;
+    min-inline-size: 0;
+  }
+
+  & #expandedtoRow {
+    flex-wrap: wrap;
+    column-gap: 8px;
+  }
+
+  & #expandedtoRow .header-row-grow {
+    min-inline-size: 0;
+  }
+
+  & .message-header-datetime {
+    max-inline-size: 100%;
+    white-space: normal;
+    margin-inline: 0;
+    font-size: 0.86rem;
+  }
+}
+
+@media (prefers-contrast: no-preference) and (forced-colors: none) {
+  :root:not([lwtheme]) #messagepanebox {
+    color: var(--desk-ink);
+    background-color: var(--desk-surface);
+  }
+
+  .message-header-container {
+    --recipient-avatar-color: var(--desk-accent);
+    --recipient-avatar-background-color: var(--desk-accent-soft);
+  }
+
+  .message-header-container :is(.message-header-datetime, .recipient-multi-line-address) {
+    color: var(--desk-muted);
+  }
+
+  .message-header-container .header-recipient:is(:hover, :focus-visible) .recipient-multi-line-address {
+    color: inherit;
+    opacity: 1;
+  }
+}
+
+.message-header-buttons-adaptive {
+  & .message-header-view-button:is(.hdrForwardButton, .hdrTrashButton, .hdrJunkButton) .toolbarbutton-text {
+    display: none;
+  }
+
+  & .message-header-view-button {
+    border-radius: 6px;
+    min-inline-size: 28px;
+    min-block-size: 27px;
+    justify-content: center;
+  }
+
+  & .hdrForwardButton {
+    margin-inline-start: auto;
+  }
+
+  & :is(.hdrReplyToSenderButton, .hdrReplyButton, .hdrReplyAllButton, .hdrReplyListButton, .hdrFollowupButton) {
+    background-color: var(--desk-accent-soft);
+    color: var(--desk-accent);
+    padding-inline: 7px;
+    font-weight: 600;
+  }
+}
+
+
+@media not (any-pointer: coarse) {
+  :root:not([uidensity="touch"]) .message-header-buttons-adaptive #header-view-toolbar:not(:hover, :focus-within) {
+    & :is(.hdrForwardButton, .hdrTrashButton, .hdrJunkButton),
+    & .email-action-flagged:not(.flagged) {
+      opacity: 0;
+    }
+  }
+}
+
+@media (max-width: 415px) {
+  .message-header-buttons-adaptive :is(.hdrArchiveButton, .hdrMoreButton) .toolbarbutton-text {
+    display: none;
+  }
 }
 
 .message-header-row {
@@ -721,7 +844,7 @@ button.email-action-flagged {
 /* Customization options */
 
 .message-header-hide-label-column {
-  padding-inline-start: 9px;
+  padding-inline-start: var(--reader-gutter, 9px);
 
   & .message-header-label {
     display: none;
@@ -754,9 +877,9 @@ button.email-action-flagged {
 
 .message-header-large-subject {
   & #expandedsubjectBox {
-    font-weight: 500;
-    font-size: 1.35em;
-    line-height: 1.35em;
+    font: 500 clamp(1.52rem, 5.15vw, 2.65rem)/1.13 var(--desk-display, Georgia, serif);
+    letter-spacing: -0.035em;
+    overflow-wrap: anywhere;
   }
 
   & #expandedsubjectLabel {

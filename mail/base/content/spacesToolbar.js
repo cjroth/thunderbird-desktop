@@ -8,7 +8,7 @@
 /* import-globals-from utilityOverlay.js */
 
 /**
- * Special vertical toolbar to organize all the buttons opening a tab.
+ * Navigation between the application's spaces.
  */
 var gSpacesToolbar = {
   SUPPORTED_BADGE_STYLES: ["--spaces-button-badge-bg-color"],
@@ -109,13 +109,6 @@ var gSpacesToolbar = {
     return document.querySelectorAll(".spaces-addon-button").length;
   },
   /**
-   * The number of pixel spacing to add to the add-ons button height calculation
-   * based on the current UI density.
-   *
-   * @type {integer}
-   */
-  densitySpacing: 0,
-  /**
    * The button that can receive focus. Used for managing focus with a roving
    * tabindex.
    *
@@ -145,13 +138,20 @@ var gSpacesToolbar = {
         space.tabInSpace(newTabInfo)
       );
       if (gSpacesToolbar.currentSpace != tabSpace) {
+        gSpacesToolbar.currentSpace?.button.removeAttribute("aria-current");
         gSpacesToolbar.currentSpace?.button.classList.remove("current");
         gSpacesToolbar.currentSpace?.menuitem?.classList.remove("current");
         gSpacesToolbar.currentSpace = tabSpace;
         if (gSpacesToolbar.currentSpace) {
+          gSpacesToolbar.currentSpace.button.setAttribute("aria-current", "page");
           gSpacesToolbar.currentSpace.button.classList.add("current");
           gSpacesToolbar.currentSpace.menuitem?.classList.add("current");
-          gSpacesToolbar.setFocusButton(gSpacesToolbar.currentSpace.button);
+          const activeButton = gSpacesToolbar.currentSpace.button;
+          gSpacesToolbar.setFocusButton(
+            activeButton.hidden
+              ? document.getElementById("spacesToolbarAddonsOverflowButton")
+              : activeButton
+          );
         }
 
         const spaceChangeEvent = new CustomEvent("spacechange", {
@@ -169,13 +169,9 @@ var gSpacesToolbar = {
    * @returns {string} - The converted hexadecimal color.
    */
   _rgbToHex(color) {
-    const rgb = color.split("(")[1].split(")")[0].split(",");
-
-    // For each array element convert to a base16 string and add zero if we get
-    // only one character.
-    const hash = rgb.map(x => parseInt(x).toString(16).padStart(2, "0"));
-
-    return `#${hash.join("")}`;
+    const { r, g, b } = InspectorUtils.colorToRGBA(color);
+    const channels = [r, g, b].map(value => value.toString(16).padStart(2, "0"));
+    return "#" + channels.join("");
   },
 
   onLoad() {
@@ -473,7 +469,10 @@ var gSpacesToolbar = {
    */
   _onSpacesToolbarKeyDown(event) {
     if (
-      !["ArrowUp", "ArrowDown", "Home", "End", " ", "Enter"].includes(event.key)
+      ![
+        "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown",
+        "Home", "End", " ", "Enter",
+      ].includes(event.key)
     ) {
       return;
     }
@@ -497,7 +496,10 @@ var gSpacesToolbar = {
     let elementIndex = buttons.indexOf(this.focusButton);
 
     // Find the adjacent focusable element based on the pressed key.
+    event.preventDefault();
+    const rtl = this.element.matches(":dir(rtl)");
     switch (event.key) {
+      case rtl ? "ArrowRight" : "ArrowLeft":
       case "ArrowUp":
         elementIndex--;
         if (elementIndex == -1) {
@@ -505,6 +507,7 @@ var gSpacesToolbar = {
         }
         break;
 
+      case rtl ? "ArrowLeft" : "ArrowRight":
       case "ArrowDown":
         elementIndex++;
         if (elementIndex > buttons.length - 1) {
@@ -567,7 +570,11 @@ var gSpacesToolbar = {
       // is set in tabmail.js.
       // NOTE: We do this before activating the button, which may move the focus
       // elsewhere, such as into a space.
-      this.setFocusButton(button);
+      this.setFocusButton(
+        button.hidden && button.classList.contains("spaces-addon-button")
+          ? document.getElementById("spacesToolbarAddonsOverflowButton")
+          : button
+      );
       listener(event);
     });
   },
@@ -689,8 +696,8 @@ var gSpacesToolbar = {
     window.addEventListener("keypress", this.onWindowKeypress);
     this.customizePanel.openPopup(
       document.getElementById("collapseButton"),
-      "end_after",
-      6,
+      "after_start",
+      0,
       0,
       false
     );
@@ -790,6 +797,31 @@ var gSpacesToolbar = {
   },
 
   /**
+   * A space switcher can stand in for a tab strip only if every open tab has
+   * its own visible destination. Documents and duplicate workspaces need tabs.
+   *
+   * @param {TabInfo[]} tabs - The open tabs in this window.
+   * @returns {boolean}
+   */
+  canNavigateAllTabs(tabs) {
+    if (this.isHidden || !this.spaces) {
+      return false;
+    }
+    const destinations = new Set();
+    for (const tab of tabs) {
+      if (tab.mode.name == "contentTab" || tab.mode.name == "mailMessageTab") {
+        return false;
+      }
+      const space = this.spaces.find(item => item.tabInSpace(tab) == 1);
+      if (!space || space.button.hidden || destinations.has(space)) {
+        return false;
+      }
+      destinations.add(space);
+    }
+    return true;
+  },
+
+  /**
    * Toggle the spaces toolbar and toolbar buttons visibility.
    *
    * @param {boolean} isHidden - The visibility state to update the elements.
@@ -812,6 +844,10 @@ var gSpacesToolbar = {
     const revealButton = document.getElementById("spacesToolbarReveal");
     revealButton.hidden = !isHidden;
     this.element.hidden = isHidden;
+    const tabs = document.getElementById("tabmail-tabs");
+    if (tabs.mCollapseToolbar) {
+      tabs.updateToolbarVisibility();
+    }
 
     if (isHidden && this.element.contains(activeElement)) {
       // If the toolbar is being hidden and one of its child element was
@@ -849,19 +885,6 @@ var gSpacesToolbar = {
       return;
     }
 
-    const density = Services.prefs.getIntPref("mail.uidensity", 1);
-    switch (density) {
-      case 0:
-        this.densitySpacing = 10;
-        break;
-      case 1:
-        this.densitySpacing = 15;
-        break;
-      case 2:
-        this.densitySpacing = 20;
-        break;
-    }
-
     // Toggle the window attribute for those CSS selectors that need it.
     if (this.isHidden) {
       document.documentElement.removeAttribute("spacestoolbar");
@@ -872,14 +895,6 @@ var gSpacesToolbar = {
   },
 
   /**
-   * Reset the inline style of the various titlebars and toolbars that interact
-   * with the spaces toolbar.
-   */
-  resetInlineStyle() {
-    document.getElementById("tabmail-tabs").removeAttribute("style");
-  },
-
-  /**
    * Update the UI based on the window sizing.
    */
   onWindowResize() {
@@ -887,14 +902,12 @@ var gSpacesToolbar = {
       return;
     }
 
-    this.updateUImacOS();
     this.updateAddonButtonsUI();
   },
 
   /**
    * Update the location of buttons added by addons based on the space available
-   * in the toolbar. If the number of buttons is greater than the height of the
-   * visible container, move those buttons inside an overflow popup.
+   * in the horizontal header. Additional spaces remain available in the popup.
    */
   updateAddonButtonsUI() {
     if (this.isHidden) {
@@ -920,89 +933,26 @@ var gSpacesToolbar = {
     }
 
     separator.collapsed = false;
-    // Use the first available button's height as reference, and include the gap
-    // defined by the UIDensity pref.
-    const buttonHeight =
-      document.querySelector(".spaces-toolbar-button").getBoundingClientRect()
-        .height + this.densitySpacing;
-
-    const containerHeight = document
-      .getElementById("spacesToolbarAddonsContainer")
-      .getBoundingClientRect().height;
-
-    // Calculate the visible threshold of add-on buttons by:
-    // - Multiplying the space occupied by one button for the number of the
-    //   add-on buttons currently present.
-    // - Subtracting the height of the add-ons container from the height
-    //   occupied by all add-on buttons.
-    // - Dividing the returned value by the height of a single button.
-    // Doing so we will get an integer representing how many buttons might or
-    // might not fit in the available area.
-    const threshold = Math.ceil(
-      (buttonHeight * this.addonButtonCount - containerHeight) / buttonHeight
+    const container = document.getElementById("spacesToolbarAddonsContainer");
+    const buttons = [...container.querySelectorAll(".spaces-addon-button")];
+    const slots = parseInt(
+      getComputedStyle(container).getPropertyValue("--spaces-addon-slots"),
+      10
     );
-
-    // Always reset the visibility of all buttons to avoid unnecessary
-    // calculations when needing to reveal hidden buttons.
-    for (const btn of document.querySelectorAll(
-      ".spaces-addon-button[hidden]"
-    )) {
-      btn.hidden = false;
-    }
-
-    // If we get a negative threshold, it means we have plenty of empty space
-    // so we don't need to do anything.
-    if (threshold <= 0) {
-      // If the overflow button was the currently focused button, move the focus
-      // to an arbitrary first available button.
-      if (this.focusButton == overflowButton) {
-        this.setFocusButton(
-          this.element.querySelector(".spaces-toolbar-button:not([hidden])")
-        );
-      }
-      overflowButton.hidden = true;
+    const overflowing = buttons.length > slots;
+    overflowButton.hidden = !overflowing;
+    if (!overflowing) {
       popup.hidePopup();
-      return;
     }
-
-    overflowButton.hidden = false;
-    // Hide as many buttons as needed based on the threshold value.
-    for (let i = 0; i <= threshold; i++) {
-      const btn = document.querySelector(
-        `.spaces-addon-button:nth-last-child(${i})`
-      );
-      if (btn) {
-        // If one of the hidden add-on buttons was the focused one, move the
-        // focus to the overflow button.
-        if (btn == this.focusButton) {
-          this.setFocusButton(overflowButton);
-        }
-        btn.hidden = true;
+    for (const [index, button] of buttons.entries()) {
+      button.hidden = index >= slots;
+      if (button.hidden && this.focusButton == button) {
+        this.setFocusButton(overflowButton);
       }
     }
-  },
-
-  /**
-   * Update the spacesToolbar UI and adjacent tabs exclusively for macOS. This
-   * is necessary mostly to tackle the changes when switching fullscreen mode.
-   */
-  updateUImacOS() {
-    // No need to to anything if we're not on macOS.
-    if (AppConstants.platform != "macosx") {
-      return;
+    if (!overflowing && this.focusButton == overflowButton) {
+      this.setFocusButton(buttons[0]);
     }
-
-    // Add inline styling to the tabmail tabs only if we're on macOS and the
-    // app is in full screen mode.
-    if (window.fullScreen) {
-      const size = this.element.getBoundingClientRect().width;
-      const style = `margin-inline-start: ${size}px;`;
-      document.getElementById("tabmail-tabs").setAttribute("style", style);
-      return;
-    }
-
-    // Reset the style if we exited full screen mode.
-    this.resetInlineStyle();
   },
 
   /**
@@ -1136,6 +1086,7 @@ var gSpacesToolbar = {
           // TODO: Make sure the spaceButtonId is set during load, and not here,
           // where it might be too late.
           gSpacesToolbar.currentSpace = this;
+          button.setAttribute("aria-current", "page");
           button.classList.add("current");
           return tab;
         },
@@ -1313,6 +1264,8 @@ var gSpacesToolbar = {
       const menuitem = document.createXULElement("menuitem");
       menuitem.classList.add("menuitem-iconic", "spaces-popup-menuitem");
       menuitem.label = button.title;
+      menuitem.classList.toggle("current", button.classList.contains("current"));
+      menuitem.classList.toggle("has-badge", button.classList.contains("has-badge"));
 
       const img = button.querySelector("img");
       for (const style of this.SUPPORTED_ICON_STYLES) {
@@ -1326,7 +1279,7 @@ var gSpacesToolbar = {
       popup.appendChild(menuitem);
     }
 
-    popup.openPopup(event.target, "after_start", 0, 0);
+    popup.openPopup(event.currentTarget, "after_start", 0, 0);
   },
 
   /**

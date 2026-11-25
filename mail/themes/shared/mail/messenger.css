@@ -39,6 +39,7 @@ body {
 }
 
 #messengerWindow {
+  font-family: var(--desk-font);
   text-rendering: optimizeLegibility;
   min-block-size: 95px;
   min-inline-size: 95px;
@@ -920,7 +921,9 @@ statuspanel {
 /* Status bar */
 
 .statusbar {
-  background-color: var(--layout-background-1);
+  font-size: 0.86rem;
+  color: var(--desk-muted);
+  background-color: var(--desk-canvas);
   border-block-start: 1px solid var(--sidebar-border);
   min-block-size: 22px;
 }
@@ -1016,16 +1019,36 @@ label.statusbarpanel {
 /* online/offline icons */
 
 #offline-status {
-  padding: 0 2px;
-  list-style-image: var(--icon-online);
   appearance: none;
-  -moz-context-properties: fill, stroke;
-  fill: color-mix(in srgb, currentColor 20%, transparent);
-  stroke: currentColor;
+  align-items: center;
+  gap: 5px;
+  margin-inline-start: 5px;
+  padding: 2px 4px;
+  font: 550 0.78rem/1.2 var(--desk-font);
+  color: var(--desk-muted);
 
-  &[offline="true"] {
-    list-style-image: var(--icon-offline);
-    fill: currentColor;
+  & .toolbarbutton-icon {
+    inline-size: 7px;
+    block-size: 7px;
+    margin: 0;
+    border: 1.5px solid var(--color-success-default);
+    border-radius: 50%;
+    background: var(--color-success-default);
+  }
+
+  &[offline] .toolbarbutton-icon {
+    border-color: currentColor;
+    background: transparent;
+  }
+
+  & .toolbarbutton-text {
+    display: flex;
+    margin: 0;
+  }
+
+  &:hover {
+    background-color: var(--desk-surface);
+    color: var(--desk-ink);
   }
 }
 

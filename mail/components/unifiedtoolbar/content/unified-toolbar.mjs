@@ -164,6 +164,12 @@ class UnifiedToolbar extends HTMLElement {
     }
 
     this.append(template);
+    // Move the live navigation alongside the customizable commands. Keeping
+    // the original node preserves extension buttons, focus and space events.
+    this.querySelector("#unifiedToolbar").before(
+      this.querySelector("#button-appmenu"),
+      document.getElementById("spacesToolbar")
+    );
 
     document
       .getElementById("unifiedToolbarCustomize")
@@ -206,9 +212,10 @@ class UnifiedToolbar extends HTMLElement {
       .getElementById("unifiedToolbarCustomize")
       .removeEventListener("command", this.#handleCustomizeCommand);
 
-    document
-      .getElementById("spacesToolbar")
-      .removeEventListener("spacechange", this.#handleSpaceChange);
+    this.querySelector("#spacesToolbar").removeEventListener(
+      "spacechange",
+      this.#handleSpaceChange
+    );
 
     document.getElementById("tabmail").unregisterTabMonitor(this.#tabMonitor);
   }

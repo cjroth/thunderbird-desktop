@@ -77,15 +77,95 @@ add_task(async () => {
       pref: "mailnews.database.global.indexer.enabled",
     },
     {
-      checkboxID: "glodaSemanticSearch",
-      pref: "mailnews.database.global.search.semantic.enabled",
-    },
-    {
       checkboxID: "allowHWAccel",
       pref: "layers.acceleration.disabled",
       prefValues: [true, false],
     }
   );
+});
+
+add_task(async function testSemanticSearchPreferences() {
+  const master = "browser.ml.enable";
+  const ranking = "mailnews.database.global.search.semantic.enabled";
+  const indexer = "mailnews.database.global.indexer.enabled";
+  const plainList = "gloda.show_as_list_by_default";
+  await SpecialPowers.pushPrefEnv({
+    set: [
+      [master, false],
+      [ranking, false],
+      [indexer, true],
+      [plainList, false],
+    ],
+  });
+
+  try {
+    const { prefsDocument, prefsWindow } = await openNewPrefsTab(
+      "paneGeneral",
+      "glodaMachineLearning"
+    );
+    const masterControl = prefsDocument.getElementById("glodaMachineLearning");
+    const rank = prefsDocument.getElementById("glodaSemanticSearch");
+    const hint = prefsDocument.getElementById("glodaSemanticDescription");
+    Assert.ok(!masterControl.checked, "Settings preserves master-off");
+    Assert.ok(rank.disabled, "Ranking requires the on-device runtime");
+    masterControl.focus();
+    EventUtils.synthesizeKey(" ", {}, prefsWindow);
+    Assert.ok(Services.prefs.getBoolPref(master), "The master is enabled");
+    Assert.ok(!rank.disabled && !rank.checked, "Ranking is a separate opt-in");
+    rank.focus();
+    EventUtils.synthesizeKey(" ", {}, prefsWindow);
+    Assert.ok(Services.prefs.getBoolPref(ranking), "Ranking is enabled");
+
+    for (const [pref, value, reason] of [
+      [indexer, false, "gloda-semantic-search-indexer-off"],
+      [plainList, true, "gloda-semantic-search-plain-list"],
+      [master, false, "gloda-semantic-search-ml-off"],
+    ]) {
+      Services.prefs.setBoolPref(pref, value);
+      Assert.ok(rank.disabled && rank.checked, "Pausing preserves the opt-in");
+      Assert.equal(hint.dataset.l10nId, reason, "The reason is shown");
+      Services.prefs.setBoolPref(pref, !value);
+      Assert.ok(!rank.disabled, "Changing the prerequisite re-enables ranking");
+    }
+
+    rank.focus();
+    EventUtils.synthesizeKey(" ", {}, prefsWindow);
+    Assert.ok(!Services.prefs.getBoolPref(ranking), "Ranking turns off");
+    Assert.ok(
+      Services.prefs.getBoolPref(master),
+      "Other ML features stay enabled"
+    );
+  } finally {
+    await closePrefsTab();
+    await SpecialPowers.popPrefEnv();
+  }
+});
+
+add_task(async function testLockedMachineLearningPreference() {
+  const master = "browser.ml.enable";
+  const defaults = Services.prefs.getDefaultBranch("");
+  const originalDefault = defaults.getBoolPref(master);
+  defaults.setBoolPref(master, false);
+  Services.prefs.lockPref(master);
+  try {
+    const { prefsDocument } = await openNewPrefsTab(
+      "paneGeneral",
+      "glodaMachineLearning"
+    );
+    const masterControl = prefsDocument.getElementById("glodaMachineLearning");
+    Assert.ok(masterControl.disabled, "A policy lock disables the master");
+    Assert.ok(!masterControl.checked, "The master stays off");
+    Assert.ok(prefsDocument.getElementById("glodaSemanticSearch").disabled);
+    Assert.equal(
+      prefsDocument.getElementById("glodaSemanticDescription").dataset.l10nId,
+      "gloda-semantic-search-ml-locked",
+      "The administrator's setting is explained"
+    );
+  } finally {
+    await closePrefsTab();
+    Services.prefs.unlockPref(master);
+    defaults.setBoolPref(master, originalDefault);
+  }
 });
 
 add_task(async () => {

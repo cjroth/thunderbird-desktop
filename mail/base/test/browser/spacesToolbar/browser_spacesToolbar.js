@@ -40,6 +40,32 @@ registerCleanupFunction(async () => {
   await new Promise(resolve => requestAnimationFrame(resolve));
 });
 
+add_task(async function testSpaceNavigationAndDocumentTabs() {
+  const tabmail = document.getElementById("tabmail");
+  const strip = document.getElementById("tabs-toolbar");
+  await SpecialPowers.pushPrefEnv({ set: [["mail.tabs.autoHide", true]] });
+  gSpacesToolbar.toggleToolbar(false);
+  const contacts = tabmail.openTab("addressBookTab", {});
+  Assert.ok(strip.collapsed, "A single tab per space needs only the header");
+
+  const folder = tabmail.openTab("mail3PaneTab", { folderURI: folderA.URI });
+  Assert.ok(!strip.collapsed, "A second mail tab has its own tab destination");
+  tabmail.closeTab(folder);
+  Assert.ok(strip.collapsed, "Closing the extra tab clears the document strip");
+
+  gSpacesToolbar.toggleToolbar(true);
+  Assert.ok(!strip.collapsed, "Hiding Spaces restores direct tab navigation");
+  gSpacesToolbar.toggleToolbar(false);
+  await SpecialPowers.pushPrefEnv({ set: [["mail.tabs.autoHide", false]] });
+  Assert.ok(
+    !strip.collapsed,
+    "The always-show-tabs preference takes precedence"
+  );
+  tabmail.closeTab(contacts);
+  await SpecialPowers.popPrefEnv();
+  await SpecialPowers.popPrefEnv();
+});
+
 async function assertMailShown(win = window) {
   await TestUtils.waitForCondition(
     () =>
@@ -357,7 +383,7 @@ add_task(async function testSpacesToolbarVisibility() {
   // Move focus to the mail button.
   const mailButton = document.getElementById("mailButton");
   // Loop around from the collapse button to the mailButton.
-  EventUtils.synthesizeKey("KEY_ArrowDown", {}, window);
+  EventUtils.synthesizeKey("KEY_ArrowRight", {}, window);
 
   Assert.ok(
     mailButton.matches(":focus"),
@@ -950,36 +976,16 @@ add_task(async function testSpacesToolbarMenubar() {
 }).skip(AppConstants.platform == "macosx"); // Can't click menu bar on Mac.
 
 add_task(async function testSpacesToolbarOSX() {
-  const size = document
-    .getElementById("spacesToolbar")
-    .getBoundingClientRect().width;
-
-  // By default, macOS shouldn't need any custom styling.
-  Assert.ok(
-    !document.getElementById("titlebar").hasAttribute("style"),
-    "The custom styling was cleared from all toolbars"
-  );
-
-  const styleAppliedPromise = TestUtils.waitForCondition(
-    () =>
-      document.getElementById("tabmail-tabs").getAttribute("style") ==
-      `margin-inline-start: ${size}px;`,
-    "The correct style was applied to the tabmail"
-  );
-
-  // Force full screen.
-  window.fullScreen = true;
-  await new Promise(resolve => requestAnimationFrame(resolve));
-  await styleAppliedPromise;
-
-  const styleRemovedPromise = TestUtils.waitForCondition(
-    () => !document.getElementById("tabmail-tabs").hasAttribute("style"),
-    "The custom styling was cleared from all toolbars"
-  );
-  // Restore original window size.
-  window.fullScreen = false;
-  await new Promise(resolve => requestAnimationFrame(resolve));
-  await styleRemovedPromise;
+  const tabs = document.getElementById("tabmail-tabs");
+  for (const fullscreen of [true, false]) {
+    window.fullScreen = fullscreen;
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    Assert.equal(
+      tabs.style.marginInlineStart,
+      "",
+      "The header does not offset the tabs when entering or leaving fullscreen"
+    );
+  }
 }).skip(AppConstants.platform != "macosx");
 
 add_task(async function testSpacesToolbarClearedAlignment() {
@@ -1097,9 +1103,8 @@ add_task(async function testSpacesToolbarExtension() {
     "spacesToolbarAddonsOverflowButton"
   );
 
-  const originalHeight = window.outerHeight;
-  // Set a ridiculous tiny height to be sure all add-on buttons are hidden.
-  window.resizeTo(window.outerWidth, 300);
+  const originalWidth = window.outerWidth;
+  window.resizeTo(780, window.outerHeight);
   await new Promise(resolve => requestAnimationFrame(resolve));
   await TestUtils.waitForCondition(
     () => !overflowButton.hidden,
@@ -1111,21 +1116,20 @@ add_task(async function testSpacesToolbarExtension() {
   overflowButton.click();
   await popupshown;
 
-  Assert.ok(overflowPopup.hasChildNodes());
+  Assert.equal(
+    overflowPopup.childElementCount,
+    6,
+    "All six spaces can be reached from the compact header"
+  );
 
   const popuphidden = BrowserTestUtils.waitForEvent(
     overflowPopup,
     "popuphidden"
   );
-  // Restore the original height.
-  window.resizeTo(window.outerWidth, originalHeight);
-  await new Promise(resolve => requestAnimationFrame(resolve));
-
+  overflowPopup.hidePopup();
   await popuphidden;
-  await TestUtils.waitForCondition(
-    () => overflowButton.hidden,
-    "The overflow button is hidden"
-  );
+  window.resizeTo(originalWidth, window.outerHeight);
+  await new Promise(resolve => requestAnimationFrame(resolve));
 
   // Remove all previously added toolbar buttons and make sure all previously
   // generate elements are properly cleared.
@@ -1142,6 +1146,10 @@ add_task(async function testSpacesToolbarExtension() {
     const menuitem = document.getElementById(`testButton${i}-menuitem`);
     Assert.ok(!menuitem);
   }
+  Assert.ok(
+    overflowButton.hidden,
+    "The overflow disappears when its spaces are removed"
+  );
 });
 
 add_task(function testPinnedSpacesBadge() {
@@ -1175,6 +1183,21 @@ add_task(function testPinnedSpacesBadge() {
   );
 });
 
+add_task(function testRightToLeftNavigation() {
+  const toolbar = document.getElementById("spacesToolbar");
+  gSpacesToolbar.toggleToolbar(false);
+  toolbar.dir = "rtl";
+  try {
+    gSpacesToolbar.setFocusButton(document.getElementById("mailButton"), true);
+    EventUtils.synthesizeKey("KEY_ArrowLeft", {}, window);
+    Assert.equal(document.activeElement.id, "addressBookButton");
+    EventUtils.synthesizeKey("KEY_ArrowRight", {}, window);
+    Assert.equal(document.activeElement.id, "mailButton");
+  } finally {
+    toolbar.removeAttribute("dir");
+  }
+});
+
 add_task(async function testSpacesToolbarFocusRing() {
   // Make sure the spaces toolbar is visible.
   window.gSpacesToolbar.toggleToolbar(false);
@@ -1190,7 +1213,7 @@ add_task(async function testSpacesToolbarFocusRing() {
   // focus.
   for (let i = 1; i < buttons.length; i++) {
     const previousElement = document.activeElement;
-    EventUtils.synthesizeKey("KEY_ArrowDown", {}, window);
+    EventUtils.synthesizeKey("KEY_ArrowRight", {}, window);
     Assert.equal(
       document.activeElement.id,
       buttons[i].id,
@@ -1206,7 +1229,7 @@ add_task(async function testSpacesToolbarFocusRing() {
   buttons.reverse();
   for (let i = 1; i < buttons.length; i++) {
     const previousElement = document.activeElement;
-    EventUtils.synthesizeKey("KEY_ArrowUp", {}, window);
+    EventUtils.synthesizeKey("KEY_ArrowLeft", {}, window);
     Assert.equal(
       document.activeElement.id,
       buttons[i].id,
@@ -1249,7 +1272,7 @@ add_task(async function testSpacesToolbarFocusRing() {
   );
 
   // Now press a key to make sure roving index was updated with the click.
-  EventUtils.synthesizeKey("KEY_ArrowDown", {}, window);
+  EventUtils.synthesizeKey("KEY_ArrowRight", {}, window);
   Assert.equal(
     document.activeElement.id,
     "tasksButton",

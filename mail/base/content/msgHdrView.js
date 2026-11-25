@@ -2775,6 +2775,7 @@ const gHeaderCustomize = {
    * @property {string} buttonStyle - The style in which the buttons should be
    *   rendered:
    *   - "default" = icons+text
+   *   - "adaptive" = label the primary reply action
    *   - "only-icons" = only icons
    *   - "only-text" = only text
    */
@@ -2784,7 +2785,7 @@ const gHeaderCustomize = {
     showFullAddress: true,
     hideLabels: true,
     subjectLarge: true,
-    buttonStyle: "default",
+    buttonStyle: "adaptive",
   },
 
   /**
@@ -2810,6 +2811,7 @@ const gHeaderCustomize = {
     const header = document.getElementById("messageHeader");
     // Always clear existing styles to avoid visual issues.
     header.classList.remove(
+      "message-header-buttons-adaptive",
       "message-header-large-subject",
       "message-header-buttons-only-icons",
       "message-header-buttons-only-text",
@@ -2819,6 +2821,7 @@ const gHeaderCustomize = {
     // Bail out if we don't have anything to customize.
     if (!Object.keys(this.customizeData).length) {
       header.classList.add(
+        "message-header-buttons-adaptive",
         "message-header-large-subject",
         "message-header-show-recipient-avatar",
         "message-header-show-sender-full-address",
@@ -2853,6 +2856,7 @@ const gHeaderCustomize = {
     );
 
     switch (this.customizeData.buttonStyle) {
+      case "adaptive":
       case "only-icons":
       case "only-text":
         header.classList.add(

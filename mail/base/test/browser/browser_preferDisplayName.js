@@ -15,6 +15,8 @@ const { ensure_cards_view, ensure_table_view } = ChromeUtils.importESModule(
 let book, emily, felix, testFolder;
 
 add_setup(async function () {
+  // Start with full addresses, then exercise the email-only and name modes.
+  await SpecialPowers.pushPrefEnv({ set: [["mail.addressDisplayFormat", 0]] });
   book = MailServices.ab.getDirectory("jsaddrbook://abook.sqlite");
 
   emily = new AddrBookCard();

@@ -408,6 +408,10 @@ pref("mail.ui-rdf.version", 0);
 pref("mailnews.attachments.display.start_expanded", false);
 // hidden pref for changing how we present attachments in the message pane
 pref("mail.pane_config.dynamic", 2);
+pref("mailnews.start_page.enabled", false);
+pref("mail.fixed_width_messages", false);
+// Show readable names in message lists. The reader exposes the full address.
+pref("mail.addressDisplayFormat", 2);
 pref("editor.singleLine.pasteNewlines", 4);  // substitute commas for new lines in single line text boxes
 pref("editor.CR_creates_new_p", true);
 pref("mail.compose.default_to_paragraph", true);
@@ -1643,4 +1647,4 @@ pref("widget.macos.native-anchored-menus", false);
 #endif
 
 // The color used to style primary buttons and elements.
-pref("mail.appearance.accentColor", "accent-color");
+pref("mail.appearance.accentColor", "thunderbird");

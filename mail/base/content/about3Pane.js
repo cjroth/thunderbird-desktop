@@ -1760,6 +1760,8 @@ var folderPane = {
     UserFeedbackListener.target.addEventListener("show-tls-error", this);
 
     Services.prefs.addObserver("mail.accountmanager.accounts", this);
+    Services.prefs.addObserver("mail.identity.", this);
+    window.addEventListener("folderURIChanged", this);
     Services.prefs.addObserver("mailnews.tags.", this);
 
     Services.obs.addObserver(this, "folder-color-changed");
@@ -1827,6 +1829,11 @@ var folderPane = {
     this.updateFolderRowUIElements();
     this.updateWidgets();
 
+    this.accountButton = document.getElementById("folderPaneAccount");
+    this.accountButton.addEventListener("click", () =>
+      top.MsgAccountManager(null, this.accountButton.account.incomingServer)
+    );
+    this.updateAccountButton();
     this._initialized = true;
   },
 
@@ -1836,6 +1843,8 @@ var folderPane = {
     }
     UserFeedbackListener.target.removeEventListener("show-tls-error", this);
     Services.prefs.removeObserver("mail.accountmanager.accounts", this);
+    Services.prefs.removeObserver("mail.identity.", this);
+    window.removeEventListener("folderURIChanged", this);
     Services.prefs.removeObserver("mailnews.tags.", this);
     Services.obs.removeObserver(this, "folder-color-changed");
     Services.obs.removeObserver(this, "folder-color-preview");
@@ -1850,6 +1859,9 @@ var folderPane = {
 
   handleEvent(event) {
     switch (event.type) {
+      case "folderURIChanged":
+        this.updateAccountButton();
+        break;
       case "show-tls-error":
         window.MozXULElement.insertFTLIfNeeded("messenger/certError.ftl");
         this._changeRows(event.detail.server.rootFolder, row => {
@@ -1906,6 +1918,9 @@ var folderPane = {
       case "nsPref:changed":
         if (data == "mail.accountmanager.accounts") {
           this._forAllActiveModes("changeAccountOrder");
+          this.updateAccountButton();
+        } else if (data.startsWith("mail.identity.")) {
+          this.updateAccountButton();
         } else if (
           data.startsWith("mailnews.tags.") &&
           this._modes.tags.active
@@ -1972,6 +1987,32 @@ var folderPane = {
    */
   get isInitialized() {
     return this._initialized;
+  },
+
+  /** Show the identity and account settings for the current mailbox. */
+  updateAccountButton() {
+    const button = this.accountButton;
+    if (!button) {
+      return;
+    }
+    const account =
+      gFolder && MailServices.accounts.findAccountForServer(gFolder.server);
+    button.account = account?.defaultIdentity
+      ? account
+      : MailServices.accounts.defaultAccount;
+    const identity = button.account?.defaultIdentity;
+    button.hidden = !identity;
+    if (!identity) {
+      return;
+    }
+
+    const name = identity.fullName || identity.email;
+    button.querySelector(".folder-account-name").textContent = name;
+    button.querySelector(".folder-account-address").textContent = identity.email;
+    const initial = name.trim().match(/[\p{L}\p{N}]/u)?.[0] || "";
+    button.querySelector(".folder-account-avatar").textContent =
+      initial.toLocaleUpperCase();
+    document.l10n.setAttributes(button, "folder-pane-account-settings", { name });
   },
 
   /**
@@ -4446,6 +4487,22 @@ var threadPane = {
 
   cardColumns: ThreadPaneColumns.getDefaultColumnsForCardsView(gFolder),
 
+  /** Open the first message in the current view, including collapsed groups. */
+  openFirstMessage() {
+    if (!gDBView?.rowCount) {
+      return;
+    }
+    const grouped = Boolean(gDBView.getFlagsAt(0) & MSG_VIEW_FLAG_DUMMY);
+    if (grouped) {
+      threadTree.expandRowAtIndex(0);
+    }
+    const index = grouped ? 1 : 0;
+    threadTree.expandRowAtIndex(index);
+    threadTree.selectedIndex = index;
+    threadTree.scrollToIndex(index, true);
+    threadTree.table.body.focus();
+  },
+
   async init() {
     await quickFilterBar.init();
 
@@ -5245,14 +5302,14 @@ var threadPane = {
       case UIDensity.MODE_TOUCH:
         rowHeight = rowHeight + 13;
         lineGap = 6;
-        densityPaddingConstant = 12; // card padding-block + 2 * row padding-block
+        densityPaddingConstant = 24;
         cardRowHeight =
           cardRowConstant + lineGap * this.rowCount + densityPaddingConstant;
         break;
       default:
         rowHeight = rowHeight + 7;
         lineGap = 3;
-        densityPaddingConstant = 7; // card padding-block + 2 * row padding-block
+        densityPaddingConstant = 19;
         cardRowHeight =
           cardRowConstant + lineGap * this.rowCount + densityPaddingConstant;
         break;

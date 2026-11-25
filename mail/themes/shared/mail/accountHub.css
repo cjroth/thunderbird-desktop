@@ -12,16 +12,16 @@
  * application because some elements are within the shadow dom. */
 :root,
 dialog {
-  --hub-button-color: light-dark(var(--color-gray-90), var(--color-gray-05));
-  --hub-button-background: light-dark(var(--color-white), var(--color-gray-90));
-  --hub-account-button-background: light-dark(transparent, var(--color-gray-70));
-  --hub-account-button-background-hover: light-dark(var(--color-ink-10), var(--color-gray-80));
-  --hub-account-button-background-hover-active: light-dark(var(--color-gray-10), var(--color-gray-90));
-  --hub-account-button-border-color: light-dark(var(--color-gray-30), var(--color-gray-60));
+  --hub-button-color: var(--desk-ink);
+  --hub-button-background: var(--desk-surface);
+  --hub-account-button-background: var(--desk-surface);
+  --hub-account-button-background-hover: var(--desk-accent-soft);
+  --hub-account-button-background-hover-active: var(--color-primary-soft);
+  --hub-account-button-border-color: var(--desk-line);
   /* TODO: Update to use proper defined light-dark varients from colors.css */
   --hub-account-button-outline-focus: var(--color-primary-hover);
   --hub-account-button-hover-active-color: light-dark(var(--color-surface-border), var(--color-surface-lower));
-  --hub-border-color: light-dark(var(--color-primary-soft), var(--color-primary-default));
+  --hub-border-color: var(--desk-line);
   --hub-divider-color: var(--color-surface-base);
   --hub-loader-background: var(--color-surface-base);
   --hub-loader-color: var(--color-primary-default);
@@ -29,9 +29,9 @@ dialog {
   --hub-width: 500px;
   --hub-manual-config-gap: calc(calc(4 * var(--space-step)) + var(--hub-input-error-message-font-size));
 
-  --hub-input-height: 33px;
-  --hub-input-border-radius: 3px;
-  --hub-input-border-color: color-mix(in srgb, currentColor 50%, transparent);
+  --hub-input-height: 38px;
+  --hub-input-border-radius: 7px;
+  --hub-input-border-color: var(--color-surface-border-intense);
   --hub-input-error-message-font-size: 0.846rem;
   --hub-close-button-color: var(--color-text-base);
   --hub-close-button-hover-background: var(--color-surface-subtle);
@@ -68,32 +68,15 @@ dialog {
 
 .account-hub-dialog {
   display: grid;
-  inline-size: 800px;
-  min-block-size: 600px;
+  inline-size: min(800px, calc(100vw - 2rem));
+  min-block-size: min(600px, calc(100vh - 2rem));
   overflow: initial;
   padding: 0;
-  box-shadow: none;
-
-  &::after {
-    --hub-blur-radius: 15px;
-    content: "";
-    position: absolute;
-    inset-block-end: -2px;
-    inset-inline: calc(2 * var(--hub-blur-radius) + 5px);
-    min-block-size: calc(3 * var(--hub-blur-radius));
-    background: linear-gradient(to right, rgba(159, 244, 240, 1), rgba(76, 177, 249, 1), rgba(168, 85, 247, 1));
-    filter: blur(var(--hub-blur-radius));
-    z-index: -1;
-  }
+  border-radius: 14px;
+  box-shadow: 0 18px 64px light-dark(rgb(24 32 52 / 14%), rgb(0 0 0 / 38%));
 
   &.account-hub-first-run::backdrop {
-    background: rgba(0, 0, 0, 0.75);
-  }
-
-  @media (prefers-color-scheme: dark) {
-    &::after {
-      background: linear-gradient(to right, rgb(11, 140, 134, 1), rgba(28, 99, 149, 1));
-    }
+    background: light-dark(rgb(22 30 48 / 36%), rgb(8 11 20 / 66%));
   }
 
   &.minimized .account-hub-view {
@@ -162,6 +145,10 @@ dialog {
   padding-block-end: 2px;
 }
 
+#autoConfigEmailForm {
+  justify-content: safe center;
+}
+
 .account-hub-address-book-form,
 .account-hub-exchange-settings-form {
   justify-content: start;
@@ -177,12 +164,9 @@ dialog {
   padding-block-start: 40px;
   border-radius: inherit;
   border: 1px solid var(--hub-border-color);
-  /* Background color to better hide loading of the webp (>=100ms) */
-  background-color: var(--color-surface-base);
-  background-image: light-dark(url("chrome://messenger/skin/images/accounthub-bg-light.webp"), url("chrome://messenger/skin/images/accounthub-bg-dark.webp"));
-  background-position: center center;
-  background-repeat: no-repeat;
-  background-size: cover;
+  background: var(--desk-surface);
+  color: var(--desk-ink);
+  font-family: var(--desk-font);
 
   &.busy {
     cursor: wait;
@@ -291,8 +275,11 @@ header {
   z-index: 3;
 
   & .sub-view-title {
-    font-size: 1.7rem;
-    font-weight: 400;
+    font-family: var(--desk-font);
+    font-size: 1.85rem;
+    letter-spacing: -0.035em;
+    line-height: 1.15;
+    font-weight: 630;
     margin-block: var(--hub-header-margin-block-start) 0;
     color: var(--color-text-base);
   }
@@ -348,9 +335,10 @@ header {
 }
 
 #brandingHeader .branding-header-title {
-  font-size: 2.8rem;
-  font-weight: 200;
-  letter-spacing: 1px;
+  font-family: var(--desk-font);
+  font-size: 2.15rem;
+  font-weight: 660;
+  letter-spacing: -0.035em;
 }
 
 .account-hub-first-run {
@@ -366,8 +354,8 @@ header {
     }
 
     & .branding-header-title {
-      font-size: 3.7rem;
-      font-weight: 300;
+      font-size: clamp(2rem, 4vw, 2.7rem);
+      font-weight: 660;
       line-height: 100%;
     }
 
@@ -525,6 +513,7 @@ header {
 
   &.email-form-body {
     position: relative;
+    gap: 12px;
   }
 
   &.password-form-body,
@@ -741,9 +730,9 @@ header {
 
 .button-account {
   inline-size: 170px;
-  min-block-size: 93px;
-  font-size: 1.2rem;
-  font-weight: normal;
+  min-block-size: 69px;
+  font-size: 1rem;
+  font-weight: 550;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -754,25 +743,20 @@ header {
   color: var(--hub-button-color);
   background-color: var(--hub-account-button-background);
   border: 1px solid var(--hub-account-button-border-color);
-  box-shadow:
-    0 4px 6px -6px rgba(0, 0, 0, 0.3),
-    inset 0 0 0 transparent;
+  border-radius: 9px;
+  box-shadow: none;
 }
 
 .button-account:hover {
   color: var(--hub-button-color) !important;
   background-color: var(--hub-account-button-background-hover) !important;
-  box-shadow:
-    0 8px 12px -8px rgba(0, 0, 0, 0.3),
-    inset 0 0 0 transparent;
+  border-color: var(--desk-accent);
 }
 
 .button-account:hover:active {
   color: var(--hub-button-color) !important;
   background-color: var(--hub-account-button-background-hover-active) !important;
-  box-shadow:
-    0 0 0 transparent,
-    inset 0 4px 6px -2px rgba(0, 0, 0, 0.4);
+  box-shadow: none;
 }
 
 .button-account::before {

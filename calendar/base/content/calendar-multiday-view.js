@@ -151,9 +151,9 @@
         MozXULElement.parseXULToFragment(`
           <stack class="multiday-column-box-stack" flex="1" role="presentation">
             <html:div class="multiday-hour-box-container"></html:div>
+            <box class="timeIndicator" hidden="hidden"/>
             <html:ol class="multiday-events-list"></html:ol>
             <html:div class="multiday-events-overflow"></html:div>
-            <box class="timeIndicator" hidden="hidden"/>
             <box class="fgdragcontainer" flex="1">
               <box class="fgdragspacer">
                 <spacer flex="1"/>
@@ -570,7 +570,11 @@
       configBox.toggleAttribute("hidden", true);
       // The minimum event duration in minutes that would give at least the
       // desired minSize in the layout.
-      const minDuration = Math.ceil(minSize / this.pixelsPerMinute);
+      // Account for the inset around the positioned event, which is outside the event box.
+      const slotInset = parseFloat(
+        getComputedStyle(this).getPropertyValue("--calendar-slot-inset")
+      );
+      const minDuration = Math.ceil((minSize + 2 * slotInset) / this.pixelsPerMinute);
 
       const dayPx = `${MINUTES_IN_DAY * this.pixelsPerMinute}px`;
       if (orient == "vertical") {
@@ -645,10 +649,18 @@
       }
 
       for (const overflowInfo of overflows) {
-        const overflowElement = document.createElement("div");
+        const overflowElement = document.createElement("button");
+        overflowElement.type = "button";
         overflowElement.classList.add("multiday-events-overflow-item");
-        document.l10n.setAttributes(overflowElement, "calendar-view-more-items", {
-          count: overflowInfo.count,
+        overflowElement.setAttribute("aria-haspopup", "menu");
+        document.l10n.setAttributes(overflowElement, "calendar-view-overlap-button", {
+          count: overflowInfo.items.length,
+        });
+        overflowElement.addEventListener("mousedown", event => event.stopPropagation());
+        overflowElement.addEventListener("dblclick", event => event.stopPropagation());
+        overflowElement.addEventListener("click", event => {
+          event.stopPropagation();
+          this.#openOverflowMenu(overflowElement, overflowInfo.items);
         });
         this.#setLayoutPosition(overflowElement, overflowInfo, orient);
         this.overflowElement.appendChild(overflowElement);
@@ -663,6 +675,38 @@
         modifyEventWithDialog(dataToEdit.eventItem, true);
       }
       this.eventToEdit = null;
+    }
+
+    /**
+     * Offer the hidden occurrences through the same view or edit action as a visible event.
+     *
+     * @param {HTMLButtonElement} button - The overlap count in this time slot.
+     * @param {calIItemBase[]} items - The occurrences grouped in this slot.
+     */
+    #openOverflowMenu(button, items) {
+      const menu = document.createXULElement("menupopup");
+      document.l10n.setAttributes(menu, "calendar-view-overlap-menu");
+      for (const item of items) {
+        const option = document.createXULElement("menuitem");
+        option.setAttribute("label", item.title || lazy.l10n.formatValueSync("event-untitled"));
+        const dates = getRelativeStartEndDates(item, this.date);
+        option.setAttribute(
+          "acceltext",
+          cal.dtz.formatter.formatTimeInterval(dates.startDate, dates.endDate)
+        );
+        option.addEventListener("command", event => {
+          this.calendarView.setSelectedItems([item]);
+          if (Services.prefs.getBoolPref("calendar.events.defaultActionEdit", true)) {
+            this.calendarView.controller.modifyOccurrence(item);
+          } else {
+            this.calendarView.controller.viewOccurrence(item, event);
+          }
+        });
+        menu.appendChild(option);
+      }
+      document.getElementById("mainPopupSet").appendChild(menu);
+      menu.addEventListener("popuphidden", () => menu.remove(), { once: true });
+      menu.openPopup(button, "after_start");
     }
 
     /**
@@ -717,7 +761,7 @@
      * events that are not shown.
      *
      * @typedef {object} EventOverflowInfo
-     * @property {number} count - The number of events not shown.
+     * @property {calIItemBase[]} items - The occurrences represented by the overlap button.
      * @property {number} start
      * @property {number} end
      * @property {number} secondaryOffset
@@ -848,7 +892,9 @@
           // It fits in this Column, so we push it to the end (preserving the
           // eventList ordering within the Column).
           column.push(eventInfo);
-        } else if (block.columns.length < MAX_EVENT_LANES) {
+        } else if (
+          block.columns.length < (this.calendarView.eventLaneLimit ?? MAX_EVENT_LANES)
+        ) {
           // This Event doesn't fit in any column, so we create a new one.
           block.columns.push([eventInfo]);
         } else {
@@ -946,13 +992,13 @@
      */
     #addOverflowsToColumn(column, overflowing) {
       let clusters = [];
-      for (const { start, end } of overflowing) {
+      for (const { start, end, eventData } of overflowing) {
         const cluster = clusters.at(-1);
         if (cluster && start < cluster.end) {
-          cluster.count++;
+          cluster.items.push(eventData.eventItem);
           cluster.end = Math.max(cluster.end, end);
         } else {
-          clusters.push({ count: 1, start, end });
+          clusters.push({ items: [eventData.eventItem], start, end });
         }
       }
 
@@ -961,13 +1007,13 @@
       while (changed) {
         changed = false;
         for (let i = shown.length - 1; i >= 0; i--) {
-          const { start, end } = shown[i];
+          const { start, end, eventData } = shown[i];
           const cluster = clusters.find(c => start < c.end && end > c.start);
           if (cluster) {
             // Removing an Event can make its cluster longer, so that it
             // overlaps other Events.
             shown.splice(i, 1);
-            cluster.count++;
+            cluster.items.unshift(eventData.eventItem);
             cluster.start = Math.min(cluster.start, start);
             cluster.end = Math.max(cluster.end, end);
             changed = true;
@@ -978,7 +1024,7 @@
         for (const cluster of clusters.sort((a, b) => a.start - b.start)) {
           const previous = merged.at(-1);
           if (previous && cluster.start < previous.end) {
-            previous.count += cluster.count;
+            previous.items.push(...cluster.items);
             previous.end = Math.max(previous.end, cluster.end);
           } else {
             merged.push(cluster);
@@ -1942,7 +1988,12 @@
               <html:img class="item-classification-icon" />
               <html:img class="item-recurrence-icon" />
             </html:div>
+            <html:div class="timed-event-time">
+              <html:span class="event-time-range"></html:span>
+              <html:span class="event-time-short"></html:span>
+            </html:div>
             <html:div class="location-desc"></html:div>
+            <html:div class="timed-event-calendar" aria-hidden="true"></html:div>
             <html:div class="calendar-category-box"></html:div>
           </html:div>
         `),
@@ -2100,6 +2151,13 @@
      */
     updateRelativeStartEndDates(day) {
       const dates = getRelativeStartEndDates(this.occurrence, day);
+      const interval = cal.dtz.formatter.formatTimeInterval(dates.startDate, dates.endDate);
+      this.querySelector(".event-time-range").textContent = interval;
+      this.querySelector(".event-time-short").textContent = cal.dtz.formatter.formatTime(
+        dates.startDate || dates.endDate
+      );
+      this.querySelector(".timed-event-calendar").textContent = this.occurrence.calendar.name;
+      this.setAttribute("aria-description", interval);
       this.startGripbar.hidden = !(dates.endDate && dates.startWithinDay);
       this.endGripbar.hidden = !(dates.startDate && dates.endWithinDay);
       return dates;
@@ -2277,6 +2335,10 @@
 
       this.headerCorner = document.createElement("div");
       this.headerCorner.classList.add("multiday-header-corner");
+      const allDayLabel = document.createElement("span");
+      allDayLabel.className = "multiday-all-day-label";
+      document.l10n.setAttributes(allDayLabel, "calendar-view-all-day-label");
+      this.headerCorner.appendChild(allDayLabel);
 
       this.grid.appendChild(this.headerCorner);
 
@@ -2824,6 +2886,23 @@
         }
       }
 
+      // At narrow widths, expose overlapping items in a menu before their titles become slivers.
+      if (this.dayColumns.length > 1) {
+        const column = this.dayColumns[0].column;
+        const extent = isHorizontal ? column.clientHeight : column.clientWidth;
+        const minimumLane = parseFloat(getComputedStyle(column).fontSize) * (isHorizontal ? 2 : 5);
+        const limit = Math.max(2, Math.min(MAX_EVENT_LANES, Math.floor(extent / minimumLane)));
+        if (this.eventLaneLimit != limit) {
+          this.eventLaneLimit = limit;
+          for (const dayCol of this.dayColumns) {
+            dayCol.column.relayout();
+          }
+        }
+      } else if (this.eventLaneLimit && this.eventLaneLimit != MAX_EVENT_LANES) {
+        this.eventLaneLimit = MAX_EVENT_LANES;
+        this.dayColumns[0]?.column.relayout();
+      }
+
       this.updateTimeIndicatorPosition();
 
       // The changes have now been handled.
@@ -3295,17 +3374,21 @@
           dayCol.date.isDate = true;
           dayCol.date.makeImmutable();
 
-          // Set up day of the week headings. This needs to happen synchronously
-          // so that it happens before the layout calculations, so we don't use
-          // `document.l10n.setAttributes` here.
-          dayCol.shortHeading.textContent = lazy.l10n.formatValueSync("day-header", {
-            dayName: dateFormatter.shortWeekdayNames[dayDate.weekday],
-            dayIndex: dateFormatter.formatDateWithoutYear(dayDate),
-          });
-          dayCol.longHeading.textContent = lazy.l10n.formatValueSync("day-header", {
-            dayName: dateFormatter.weekdayNames[dayDate.weekday],
-            dayIndex: dateFormatter.formatDateWithoutYear(dayDate),
-          });
+          // Both variants must be populated before readjustView measures their dimensions.
+          const number = dateFormatter.formatDateOnly(dayDate);
+          for (const [heading, name] of [
+            [dayCol.shortHeading, dateFormatter.shortWeekdayNames[dayDate.weekday]],
+            [dayCol.longHeading, dateFormatter.weekdayNames[dayDate.weekday]],
+          ]) {
+            const weekday = document.createElement("span");
+            weekday.className = "day-column-weekday";
+            weekday.textContent = name;
+            const day = document.createElement("span");
+            day.className = "day-column-number";
+            day.textContent = number;
+            heading.replaceChildren(weekday, " ", day);
+          }
+          dayCol.headingContainer.ariaLabel = dateFormatter.formatDateLong(dayDate);
 
           /* Set up all-day header. */
           dayCol.header.date = dayDate;
@@ -3322,6 +3405,7 @@
           const isToday = dayDate.compare(today) == 0;
           dayCol.column.timeIndicatorBox.hidden = !isToday;
           dayCol.container.classList.toggle("day-column-today", isToday);
+          dayCol.headingContainer.ariaCurrent = isToday ? "date" : null;
         }
         // Remove excess columns.
         for (const dayCol of this.dayColumns.splice(colIndex)) {

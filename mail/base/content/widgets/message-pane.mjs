@@ -143,6 +143,9 @@ class MessagePane extends HTMLElement {
       .getElementById("messagePaneTemplate")
       .content.cloneNode(true);
     this.append(template);
+    this.querySelector(".reader-open-first").addEventListener("click", () =>
+      window.threadPane.openFirstMessage()
+    );
 
     this.webBrowser = this.querySelector("#webBrowser");
     this.messageBrowser = this.querySelector("#messageBrowser");

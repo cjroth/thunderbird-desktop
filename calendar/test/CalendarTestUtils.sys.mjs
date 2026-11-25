@@ -1140,7 +1140,15 @@ export const CalendarTestUtils = {
       }
     }
 
+    const disclosure = miniMonth.querySelector(".minimonth-month-disclosure");
+    const openYearControls = activeYear != year && disclosure.ariaExpanded == "false";
+    if (openYearControls) {
+      EventUtils.synthesizeMouseAtCenter(disclosure, {}, win);
+    }
     await doScroll("year", activeYear - year, 10);
+    if (openYearControls) {
+      EventUtils.synthesizeMouseAtCenter(disclosure, {}, win);
+    }
     await doScroll("month", activeMonth - (month - 1), 25);
 
     function getMiniMonthDay(week, weekDay) {

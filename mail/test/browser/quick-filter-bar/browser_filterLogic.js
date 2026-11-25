@@ -130,6 +130,41 @@ add_task(async function test_filter_starred() {
   teardownTest();
 });
 
+add_task(async function test_statusScopesPreserveOtherFilters() {
+  const folder = await create_folder("QuickFilterBarStatusScopes");
+  const [unread, starred] = await make_message_sets_in_folders(
+    [folder],
+    [{ count: 1 }, { count: 1 }]
+  );
+  starred.setRead(true);
+  starred.setStarred(true);
+  await be_in_folder(folder);
+
+  const pane = get_about_3pane();
+  const scope = name =>
+    pane.document.querySelector(`[data-mail-scope="${name}"]`);
+  await toggle_boolean_constraints("starred");
+  Assert.equal(scope("starred").ariaPressed, "true");
+
+  scope("unread").focus();
+  EventUtils.synthesizeKey("KEY_Enter", {}, pane);
+  await TestUtils.waitForCondition(
+    () =>
+      pane.gDBView?.rowCount === 1 &&
+      pane.gDBView.getMsgHdrAt(0).messageId === unread.getMsgHdr(0).messageId,
+    "The Unread scope should replace the native Starred constraint"
+  );
+  assert_messages_in_view(unread);
+  Assert.equal(scope("starred").ariaPressed, "false");
+
+  await toggle_boolean_constraints("attachment");
+  EventUtils.synthesizeMouseAtCenter(scope("all"), {}, pane);
+  await TestUtils.waitForCondition(() => scope("all").ariaPressed === "true");
+  Assert.ok(pane.quickFilterBar.filterer.filterValues.attachment);
+  assert_messages_in_view([]);
+  teardownTest();
+});
+
 add_task(async function test_filter_simple_intersection_unread_and_starred() {
   const folder = await create_folder("QuickFilterBarFilterUnreadAndStarred");
   const [, readUnstarred, unreadStarred, readStarred] =

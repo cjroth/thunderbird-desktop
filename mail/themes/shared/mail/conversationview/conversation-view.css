@@ -18,7 +18,7 @@ header {
   align-items: center;
   position: sticky;
   inset-block-start: 0;
-  padding: 9px 12px;
+  padding: 12px clamp(12px, 3vi, 28px);
   background: var(--color-surface-lower);
   color: var(--color-text-base);
   border-block-end: 1px solid var(--color-surface-border);
@@ -45,8 +45,10 @@ header {
 
   & .title {
     margin-block: 0;
-    font-size: 1.5rem;
-    font-weight: 500;
+    font-family: var(--desk-display);
+    font-size: 1.75rem;
+    line-height: 1.2;
+    font-weight: 400;
   }
 
   & :is(.toolbar, .actions) {
@@ -65,7 +67,7 @@ header {
     grid-template-rows: 1fr;
     gap: 6px 3px;
     align-items: center;
-    padding: 9px 12px;
+    padding: 12px clamp(12px, 3vi, 28px);
 
     &[aria-expanded="false"] {
       cursor: pointer;
@@ -94,7 +96,8 @@ header {
     }
 
     & time {
-      font-size: 0.9375rem;
+      font-size: 0.9rem;
+      color: var(--desk-muted);
       text-align: end;
     }
 

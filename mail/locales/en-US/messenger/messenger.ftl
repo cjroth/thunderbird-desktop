@@ -483,6 +483,9 @@ message-header-customize-button-style =
     .value = Button style
     .accesskey = B
 
+message-header-button-style-adaptive =
+    .label = Label reply actions
+
 message-header-button-style-default =
     .label = Icons and text
 
@@ -588,10 +591,12 @@ decrypt-and-copy-failures-multiple =
 spaces-toolbar-element =
     .toolbarname = Spaces Toolbar
     .aria-label = Spaces Toolbar
-    .aria-description = Vertical toolbar for switching between different spaces. Use the arrow keys to navigate the available buttons.
+    .aria-description = Switch between spaces. Use the arrow keys to navigate the available buttons.
 
 spaces-toolbar-button-mail2 =
     .title = Mail
+
+spaces-navigation-contacts = Contacts
 
 spaces-toolbar-button-address-book2 =
     .title = Address Book
@@ -925,3 +930,10 @@ tags-format-with-accesskey =
 #   $name (String) - The default or user-defined name of the tag.
 tags-format-without-accesskey =
     .label = { $name }
+
+mail-status-offline =
+    .label = Offline
+    .tooltiptext = Switch to online mode
+mail-status-online =
+    .label = Online
+    .tooltiptext = Switch to offline mode

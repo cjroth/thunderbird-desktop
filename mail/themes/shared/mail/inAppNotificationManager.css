@@ -4,14 +4,9 @@
 
 :root {
   --in-app-notification-window-padding: 24px;
-  --spaces-toolbar-offset: var(--spaces-total-width);
-  --in-app-notification-offset-inline: calc(var(--spaces-toolbar-offset) + var(--in-app-notification-window-padding));
   --in-app-notification-offset-block: var(--in-app-notification-window-padding);
 }
 
-:root:has(#spacesToolbar.spaces-toolbar[hidden]) {
-  --spaces-toolbar-offset: 0px;
-}
 
 in-app-notification-manager {
   position: relative;
@@ -32,7 +27,7 @@ in-app-notification-manager {
     }
 
     &.bottom-spaces-toolbar {
-      inset-inline-start: var(--in-app-notification-offset-inline);
+      inset-inline-start: var(--in-app-notification-window-padding);
     }
   }
 }

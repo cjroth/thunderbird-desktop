@@ -6,11 +6,11 @@
 @import url("chrome://messenger/skin/shared/serverMenuItems.css");
 
 :root {
-  --unified-toolbar-padding: 4px;
+  --unified-toolbar-padding: 7px;
   --unified-drag-space: 30px;
   --unified-customization-padding: 30px;
   /* minimal possible toolbar height */
-  --unified-toolbar-minimal-height: 30px;
+  --unified-toolbar-minimal-height: 32px;
   /* button border + button padding */
   --unified-toolbar-button-spacing-height: calc(2px + var(--button-padding) * 2);
   /* 1lh for the text */
@@ -46,7 +46,12 @@
 
 unified-toolbar {
   display: block;
-  border-block-end: 1px solid rgba(0, 0, 0, 0.15);
+  border-block-end: 1px solid var(--chrome-content-separator-color);
+
+  :root:not([lwtheme]) & {
+    background-color: var(--desk-surface);
+    color: var(--desk-ink);
+  }
 }
 
 #unifiedToolbarContainer {
@@ -54,7 +59,11 @@ unified-toolbar {
   justify-content: space-between;
   align-items: center;
   -moz-window-dragging: drag;
-  inline-size: 100vw;
+  inline-size: 100%;
+  min-inline-size: 0;
+  box-sizing: border-box;
+  padding-inline: 6px;
+  gap: 3px;
 
   /* minheight for the macOS titlebar */
   .customizingUnifiedToolbar & {
@@ -69,8 +78,16 @@ unified-toolbar {
     }
   }
 
+  @media (-moz-platform: windows) or (-moz-platform: linux) {
+    padding-inline-end: 0;
+  }
+
   @media (-moz-gtk-csd-reversed-placement) {
-    flex-direction: row-reverse;
+    padding-inline: 0 6px;
+
+    & .titlebar-buttonbox-container {
+      order: -1;
+    }
   }
 }
 
@@ -97,7 +114,19 @@ unified-toolbar {
   margin: 0;
   /* Padding needed for the children's focus ring. */
   padding-block: 3px;
-  padding-inline: var(--unified-drag-space) 3px;
+  padding-inline: clamp(3px, 1vw, 18px) 10px;
+
+  & .search-bar {
+    flex: 0 1 22rem;
+    min-inline-size: 4em;
+
+    & kbd {
+      font: 550 0.73rem/1.25 var(--desk-font);
+      border-color: var(--desk-line);
+      border-radius: 4px;
+      padding: 1px 4px;
+    }
+  }
 
   & li {
     -moz-window-dragging: no-drag;
@@ -117,6 +146,37 @@ unified-toolbar {
       --search-outline-offset: var(--focus-outline-offset);
     }
   }
+}
+
+#button-appmenu {
+  -moz-window-dragging: no-drag;
+  list-style-image: url("chrome://branding/content/about-logo.svg");
+  flex: none;
+  gap: 7px;
+  margin-inline: 3px;
+  padding: 3px 6px;
+  border-radius: 7px;
+
+  & .toolbarbutton-icon {
+    width: 29px;
+    height: 29px;
+  }
+
+  & .toolbarbutton-text {
+    display: flex;
+    font: 680 1.02rem/1 var(--desk-font);
+    letter-spacing: -0.035em;
+  }
+
+  @media (max-width: 980px) {
+    & .toolbarbutton-text {
+      display: none;
+    }
+  }
+}
+
+.customizingUnifiedToolbar #button-appmenu {
+  display: none;
 }
 
 unified-toolbar-customization {

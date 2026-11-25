@@ -12,8 +12,8 @@
 :root {
   user-select: auto; /* Overrides messenger.css. */
 
-  --heading-wrapper-padding: 6px 9px;
-  --content-padding: 6px 18px;
+  --heading-wrapper-padding: 14px 18px;
+  --content-padding: 12px 24px;
 
   &[uidensity="compact"] {
     --heading-wrapper-padding: 3px 6px;
@@ -64,8 +64,9 @@ body {
 
 #heading {
   flex: 1;
-  font-size: 1.3rem;
-  font-weight: normal;
+  font-family: var(--desk-display);
+  font-size: 1.65rem;
+  font-weight: 400;
   margin: 0;
   padding: 0;
 }
@@ -88,6 +89,7 @@ body {
   margin: 0;
   padding: 0;
   list-style-type: none;
+  font-family: var(--desk-font);
 
   & > li {
     position: relative;

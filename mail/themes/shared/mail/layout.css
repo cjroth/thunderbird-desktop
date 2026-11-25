@@ -22,20 +22,20 @@
 
 :host,
 :root {
-  --layout-background-0: light-dark(var(--color-white), var(--color-gray-90));
-  --layout-background-1: light-dark(var(--color-gray-05), var(--color-gray-80));
-  --layout-background-2: light-dark(var(--color-gray-10), var(--color-gray-70));
-  --layout-background-3: light-dark(var(--color-gray-20), var(--color-gray-60));
-  --layout-background-4: light-dark(var(--color-gray-30), var(--color-gray-50));
+  --layout-background-0: var(--desk-surface);
+  --layout-background-1: var(--desk-canvas);
+  --layout-background-2: var(--desk-sidebar);
+  --layout-background-3: var(--color-surface-subtle);
+  --layout-background-4: var(--color-surface-deep);
 
-  --layout-color-0: light-dark(var(--color-black), var(--color-white));
-  --layout-color-1: light-dark(var(--color-gray-90), var(--color-gray-10));
-  --layout-color-2: light-dark(var(--color-gray-70), var(--color-gray-30));
-  --layout-color-3: var(--color-gray-50);
+  --layout-color-0: var(--desk-ink);
+  --layout-color-1: var(--desk-ink);
+  --layout-color-2: var(--color-text-secondary);
+  --layout-color-3: var(--desk-muted);
 
-  --layout-border-0: var(--color-neutral-200);
-  --layout-border-1: light-dark(var(--color-gray-40), var(--color-gray-60));
-  --layout-border-2: var(--color-gray-50);
+  --layout-border-0: var(--desk-line);
+  --layout-border-1: var(--color-surface-border-intense);
+  --layout-border-2: var(--desk-muted);
 
   @media (prefers-contrast) {
     --layout-background-0: Window;

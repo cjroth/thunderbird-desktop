@@ -340,6 +340,12 @@ function onLoad() {
   // set the iframe's top level id for event vs task
   if (item.isTodo()) {
     setDialogId(document.documentElement, "calendar-task-dialog-inner");
+  } else {
+    const { UIFontSize } = ChromeUtils.importESModule("resource:///modules/UIFontSize.sys.mjs");
+    UIFontSize.registerWindow(window);
+    if (!gInTab) {
+      UIFontSize.registerWindow(window.parent);
+    }
   }
 
   document.l10n.setAttributes(

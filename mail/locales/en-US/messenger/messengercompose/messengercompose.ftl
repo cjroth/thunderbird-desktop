@@ -23,6 +23,16 @@ compose-initialization-error = An error occurred while creating a message compos
 
 compose-default-subject = (no subject)
 
+compose-subject-field =
+    .placeholder = Add a subject
+
+compose-formatting-button = Formatting
+    .title = Show or hide text formatting
+compose-focus-button = Focus
+    .title = Hide controls and focus on writing
+compose-exit-focus-button = Exit focus
+    .title = Return to the full composer
+
 # Variables:
 # $subject - message subject
 # $brand - application name

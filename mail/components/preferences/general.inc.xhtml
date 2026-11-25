@@ -962,18 +962,30 @@
                     data-l10n-id="enable-global-search-label"/>
         </hbox>
         <hbox>
-          <checkbox id="glodaSemanticSearch"
-                    preference="mailnews.database.global.search.semantic.enabled"
-                    aria-describedby="glodaSemanticDescription"
-                    data-l10n-id="gloda-semantic-search-label"/>
-        </hbox>
-        <description id="glodaSemanticDescription"
-                     data-l10n-id="gloda-semantic-search-description"/>
-        <hbox>
           <checkbox id="glodaFacetShowAsList"
                     preference="gloda.show_as_list_by_default"
                     data-l10n-id="gloda-results-plain-list-label"/>
         </hbox>
+        <hbox>
+          <checkbox id="glodaMachineLearning"
+                    preference="browser.ml.enable"
+                    aria-describedby="glodaMachineLearningDescription"
+                    data-l10n-id="gloda-machine-learning-label"/>
+        </hbox>
+        <description id="glodaMachineLearningDescription"
+                     class="indent tip-caption"
+                     data-l10n-id="gloda-machine-learning-description"/>
+        <vbox class="indent">
+          <hbox>
+            <checkbox id="glodaSemanticSearch"
+                      preference="mailnews.database.global.search.semantic.enabled"
+                      aria-describedby="glodaSemanticDescription"
+                      data-l10n-id="gloda-semantic-search-label"/>
+          </hbox>
+          <description id="glodaSemanticDescription"
+                       class="indent tip-caption"
+                       data-l10n-id="gloda-semantic-search-description"/>
+        </vbox>
         <hbox align="center">
           <label control="storeTypeMenulist" data-l10n-id="storage-format-label"/>
           <hbox>

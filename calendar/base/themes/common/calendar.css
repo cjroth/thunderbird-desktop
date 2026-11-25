@@ -26,8 +26,311 @@
   min-inline-size: 175px;
 }
 
+#calSidebar:not([width]) {
+  inline-size: clamp(220px, 19vw, 280px);
+}
+
+#calSidebar #minimonth-pane,
+#calSidebar #minimonth-pane > vbox {
+  min-inline-size: 0;
+  align-items: stretch;
+  inline-size: 100%;
+}
+
+#calSidebar #calMinimonthBox {
+  display: block;
+  min-inline-size: 0;
+  inline-size: calc(100% - 12px);
+  margin-inline: 6px;
+}
+
+#calSidebar #calMinimonth {
+  display: block;
+  min-inline-size: 0;
+  inline-size: 100%;
+  box-sizing: border-box;
+}
+
+#calSidebar .minimonth-calendar {
+  table-layout: fixed;
+  inline-size: 100%;
+  box-sizing: border-box;
+  padding-inline: 0;
+}
+
+#calSidebar .minimonth-day {
+  padding-inline: 0;
+}
+
+#calSidebar .minimonth-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+#calSidebar .minimonth-nav-section {
+  margin: 0;
+  border: 0;
+}
+
+#calSidebar .minimonth-nav-btn {
+  inline-size: 22px;
+  min-inline-size: 0;
+  background-size: 14px;
+}
+
+#calSidebar .minimonth-year-name {
+  inline-size: 4.5ch;
+}
+
+#calSidebar #primaryButtonSidePanel {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  padding: 20px 14px 14px;
+}
+
+#primaryButtonSidePanel h1 {
+  font: 650 1.35rem/1.15 var(--desk-font);
+  letter-spacing: -0.035em;
+  margin: 0;
+}
+
+#primaryButtonSidePanel:has(#sidePanelNewEvent[hidden]) #plannerCalendarHeading,
+#primaryButtonSidePanel:has(#sidePanelNewTask[hidden]) #plannerTasksHeading {
+  display: none;
+}
+
 #calendarContent {
   background-color: var(--layout-background-0);
+}
+
+@media (prefers-contrast: no-preference) {
+  #calSidebar calendar-minimonth {
+    --mmMainBackground: transparent;
+    --mmMainBorderColor: transparent;
+    --mmMainBorderRadius: 10px;
+    --mmBoxBackground: transparent;
+    --mmBoxBorderColor: var(--desk-line);
+    --mmDayColor: var(--desk-ink);
+    --mmDayOtherColor: var(--desk-muted);
+    --mmDayTodayBackground: var(--desk-accent-soft);
+    --mmDaySelectedColor: var(--desk-on-accent);
+    --mmDaySelectedBackground: var(--desk-accent);
+    --mmDaySelectedTodayBackground: var(--desk-accent);
+    --mmDaySelectedBorderColor: transparent;
+    --mmDaySelectedTodayBorderColor: transparent;
+    --mmDayBorderRadius: 7px;
+  }
+}
+
+/* Calendar workspace sidebar */
+#calSidebar #primaryButtonSidePanel:has(#sidePanelNewEvent:not([hidden])) {
+  padding: 20px 15px 13px;
+  gap: 13px;
+}
+
+#calSidebar #sidePanelNewEvent {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-image: none;
+  padding-inline: 10px;
+  min-block-size: 36px;
+}
+
+#calSidebar #sidePanelNewEvent[hidden] {
+  display: none;
+}
+
+#sidePanelNewEvent::before {
+  content: "";
+  inline-size: 15px;
+  block-size: 15px;
+  background: currentColor;
+  mask: var(--icon-add) center / contain no-repeat;
+}
+
+#calSidebar #calMinimonthBox {
+  inline-size: calc(100% - 22px);
+  margin-inline: 11px;
+}
+
+#calMinimonth .minimonth-compact-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  margin-block: 3px 8px;
+}
+
+#calMinimonth .minimonth-month-disclosure {
+  color: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  min-inline-size: 0;
+  margin: 0;
+  margin-inline-end: auto;
+  padding: 3px 4px;
+  text-align: start;
+  font: 620 0.97rem/1.25 var(--desk-font);
+  overflow-wrap: anywhere;
+}
+
+#calMinimonth .minimonth-month-disclosure::after {
+  content: "";
+  display: inline-block;
+  inline-size: 12px;
+  block-size: 12px;
+  margin-inline-start: 3px;
+  vertical-align: -2px;
+  -moz-context-properties: stroke;
+  stroke: currentColor;
+  background: var(--icon-nav-down-sm) center / contain no-repeat;
+}
+#calMinimonth .minimonth-month-disclosure[aria-expanded="true"]::after {
+  transform: rotate(180deg);
+}
+#calMinimonth .minimonth-month-disclosure:hover {
+  background: var(--button-background-color-hover);
+}
+#calMinimonth .minimonth-compact-toolbar .minimonth-nav-btn {
+  border: 0;
+  border-radius: 5px;
+  inline-size: 23px;
+  min-block-size: 25px;
+  margin: 0;
+  padding: 0;
+  background-color: transparent;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+#calMinimonth .minimonth-compact-toolbar .minimonth-nav-btn:hover {
+  background-color: var(--button-background-color-hover);
+}
+#calSidebar #calMinimonth .minimonth-header[hidden],
+#calMinimonth .minimonth-nav-section:has(.minimonth-month-name) {
+  display: none;
+}
+
+#calSidebar .minimonth-day,
+#calSidebar .minimonth-row-header,
+#calSidebar .minimonth-week {
+  font-variant-numeric: tabular-nums;
+}
+#calSidebar .minimonth-row-header,
+#calSidebar .minimonth-row-header-week,
+#calSidebar .minimonth-week {
+  font-size: 0.78rem;
+  font-weight: 520;
+}
+
+#calendar-panel {
+  min-block-size: 0;
+  overflow-y: auto;
+}
+
+#selectedDayAgendaPane {
+  padding: 12px 10px 13px;
+  border-block-end: 1px solid var(--desk-line, GrayText);
+}
+
+#selectedDayAgendaHeading {
+  margin: 0 5px 6px;
+  font: 640 1rem/1.35 var(--desk-font);
+  letter-spacing: -0.014em;
+}
+
+#selectedDayAgenda {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-block-size: 12.5rem;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+#selectedDayAgendaEmpty {
+  margin: 4px 5px 0;
+  font-size: 0.91rem;
+}
+
+#selectedDayAgenda:is(:not(:empty), [aria-busy="true"]) + #selectedDayAgendaEmpty {
+  display: none;
+}
+
+.calendar-agenda-event {
+  appearance: none;
+  display: grid;
+  position: relative;
+  gap: 2px;
+  align-content: center;
+  inline-size: 100%;
+  min-inline-size: 0;
+  text-align: start;
+  color: inherit;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  margin: 0;
+  padding: 5px 6px;
+  padding-inline-start: 15px;
+}
+
+.calendar-agenda-event::before {
+  content: "";
+  position: absolute;
+  inset-block: 8px;
+  inset-inline-start: 5px;
+  inline-size: 3px;
+  background: var(--agenda-color);
+  border-radius: 2px;
+}
+
+.calendar-agenda-event:hover {
+  background-color: var(--button-background-color-hover);
+}
+.calendar-agenda-event:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: -2px;
+}
+.calendar-agenda-title {
+  font-weight: 560;
+  line-height: 1.25;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.calendar-agenda-time {
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+#calSidebar #calendar-list-pane {
+  min-block-size: 7.5rem;
+}
+#calSidebar #calendarListHeader {
+  padding: 12px 15px 5px;
+  font: 640 1rem/1.3 var(--desk-font);
+}
+#calSidebar #calendar-list > li {
+  margin-inline: 9px;
+  padding-inline: 7px;
+  border-radius: 6px;
+}
+
+@media (prefers-contrast: no-preference) {
+  .calendar-agenda-time,
+  #selectedDayAgendaEmpty,
+  #calSidebar .minimonth-row-header,
+  #calSidebar .minimonth-week {
+    color: var(--desk-muted);
+  }
+  #calSidebar #calendar-list:not(:focus-within) > li.selected {
+    background: color-mix(in srgb, var(--desk-muted) 9%, transparent);
+  }
 }
 
 /* Avoids contributing to the min width when Calendar is not selected. */

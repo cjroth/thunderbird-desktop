@@ -66,6 +66,7 @@
 
   & .search-bar {
     flex: 1 1 33%;
+    max-inline-size: 38rem;
     min-inline-size: 5em;
   }
 
@@ -87,6 +88,19 @@
 
   & .unifinder .button-icon {
     content: var(--icon-search);
+  }
+
+  & .folder-location {
+    max-inline-size: min(32vw, 23rem);
+
+    & .button-label {
+      max-inline-size: min(24vw, 19rem);
+      font-weight: 600;
+    }
+
+    & .folder-location-account {
+      font-weight: 450;
+    }
   }
 
   & .folder-location .button-icon {

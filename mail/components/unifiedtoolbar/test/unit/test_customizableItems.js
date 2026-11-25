@@ -49,9 +49,16 @@ add_task(function test_getDefaultItemIdsForSpace_default() {
   Assert.ok(Array.isArray(items), "Should return an array");
   Assert.deepEqual(
     items,
-    ["spacer", "search-bar", "spacer"],
+    ["spacer", "search-bar"],
     "Default space should contain the default item set"
   );
+});
+
+add_task(function test_getDefaultItemIdsForSpace_mail() {
+  Assert.deepEqual(getDefaultItemIdsForSpace("mail"), [
+    "spacer",
+    "search-bar",
+  ]);
 });
 
 add_task(function test_getDefaultItemIdsForSpace_cloningArray() {

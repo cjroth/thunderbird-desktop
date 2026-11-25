@@ -56,8 +56,18 @@ html|moz-input-search {
 
 #pref-category-box {
   background-color: var(--sidebar-background);
-  border-inline-end: none;
-  inline-size: 18em;
+  border-inline-end: 1px solid var(--sidebar-border);
+  inline-size: clamp(12em, 18vw, 18em);
+}
+
+html|h1.settings-navigation-title {
+  margin-block: 1.1em 0.45em;
+  margin-inline: 0.8em;
+  font-family: var(--desk-font);
+  letter-spacing: -0.035em;
+  font-size: clamp(1.45rem, 2vw, 1.85rem);
+  font-weight: 670;
+  line-height: 1.16;
 }
 
 /* Temporary styles for the supernova icons */
@@ -88,8 +98,8 @@ html|moz-input-search {
  */
 
 .subcategory:not([hidden]) ~ .subcategory {
-  margin-block-start: 16px;
-  padding-block-start: 16px;
+  margin-block-start: 22px;
+  padding-block-start: 22px;
   border-block-start: 1px solid var(--border-color);
   /* Avoid being hidden under the sticky container. This value is the height
      of that container minus this element's border and padding. */
@@ -108,9 +118,11 @@ fieldset {
 
 html|h1 {
   margin: 0 0 8px;
-  font-size: 1.46em;
-  font-weight: 300;
-  line-height: 1.3em;
+  font-family: var(--desk-font);
+  letter-spacing: -0.035em;
+  font-size: clamp(1.65rem, 2.7vw, 2.55rem);
+  font-weight: 675;
+  line-height: 1.18;
 }
 
 html|legend {
@@ -162,14 +174,16 @@ menulist::part(dropmarker-icon) {
 }
 
 #preferencesContainer {
-  padding: 0 28px 40px;
+  padding-block: 0 40px;
+  padding-inline: clamp(16px, 4vw, 64px);
   overflow: auto;
 }
 
 .paneDeckContainer {
   display: block;
-  inline-size: min(100%, 800px);
+  inline-size: min(100%, 56rem);
   min-inline-size: min-content;
+  margin-inline: auto;
 }
 
 #paneDeck {
@@ -317,9 +331,23 @@ tabpanel > hbox > description {
 
 /* Category List */
 
-#categories {
+#pref-category-box > #categories {
   overflow: visible;
   min-block-size: auto;
+  margin-block-start: 0;
+}
+
+@media (prefers-contrast: no-preference) {
+  #categories .category {
+    border-radius: var(--button-border-radius);
+    margin-block: 2px;
+  }
+
+  #categories .category[selected] {
+    color: var(--desk-accent);
+    background-color: var(--desk-accent-soft);
+    font-weight: 650;
+  }
 }
 
 .sidebar-footer-link {
@@ -1406,7 +1434,7 @@ qr-code-wizard {
   }
 
   &[value="thunderbird"]::part(icon) {
-    background-color: light-dark(var(--color-blue-60), var(--color-accent-blue-dark));
+    background-color: var(--color-primary-default);
   }
 
   &[value="purple"]::part(icon) {
@@ -1450,7 +1478,7 @@ qr-code-wizard {
     }
 
     &.accent-color-thunderbird::before {
-      background-color: light-dark(var(--color-blue-60), var(--color-accent-blue-dark));
+      background-color: var(--thunderbird-accent-color);
     }
 
     &.accent-color-purple::before {

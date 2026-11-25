@@ -68,7 +68,16 @@ class FolderLocationButton extends MailTabButton {
       return;
     }
     this.disabled = false;
-    this.label.textContent = gFolder.localizedName;
+    this.label.replaceChildren();
+    if (!gFolder.isServer) {
+      const account = document.createElement("bdi");
+      account.className = "folder-location-account";
+      account.textContent = gFolder.server.prettyName;
+      this.label.append(account, " / ");
+    }
+    const folder = document.createElement("bdi");
+    folder.textContent = gFolder.localizedName;
+    this.label.append(folder);
     this.#icon.style = `content: url(${lazy.FolderUtils.getFolderIcon(
       gFolder
     )});`;

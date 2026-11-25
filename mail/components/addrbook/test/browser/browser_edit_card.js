@@ -745,7 +745,6 @@ add_task(async function test_basic_edit() {
 
   const viewContactName = abDocument.getElementById("viewContactName");
   const viewContactNickName = abDocument.getElementById("viewContactNickName");
-  const viewContactEmail = abDocument.getElementById("viewPrimaryEmail");
   const editContactName = abDocument.getElementById("editContactHeadingName");
   const editContactNickName = abDocument.getElementById(
     "editContactHeadingNickName"
@@ -791,7 +790,7 @@ add_task(async function test_basic_edit() {
   function assertViewHeadings(name, nickname, email) {
     assertHeading(viewContactName, name);
     assertHeading(viewContactNickName, nickname);
-    assertHeading(viewContactEmail, email);
+    Assert.equal(abDocument.querySelector("#emailAddresses a")?.textContent ?? "", email);
   }
 
   /**

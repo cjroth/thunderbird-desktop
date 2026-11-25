@@ -347,7 +347,6 @@ add_task(function test_global_items_migration() {
   Assert.deepEqual(newState.settings, [
     "spacer",
     "search-bar",
-    "spacer",
     "add-ons-and-themes",
   ]);
 
@@ -362,7 +361,7 @@ add_task(function test_global_items_migration_defaults() {
 
   const newState = getState();
 
-  Assert.deepEqual(newState.settings, ["spacer", "search-bar", "spacer"]);
+  Assert.deepEqual(newState.settings, ["spacer", "search-bar"]);
 
   storeState({});
 });

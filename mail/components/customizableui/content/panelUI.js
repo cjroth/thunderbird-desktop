@@ -62,7 +62,7 @@ const PanelUI = {
     return {
       mainView: "appMenu-mainView",
       multiView: "appMenu-multiView",
-      menuButton: "button-appmenu",
+      menuButtonMail: "button-appmenu",
       panel: "appMenu-popup",
       addonNotificationContainer: "appMenu-addon-banners",
       navbar: "mail-bar3",
@@ -258,7 +258,7 @@ const PanelUI = {
     // This works for now, but in the long run, if we're showing badges etc.
     // then the current menuButton needs to be set when the app's view/tab
     // changes, not just when the menu is toggled.
-    this.menuButton = event.target;
+    this.menuButton = event.currentTarget;
 
     this._ensureEventListenersAdded();
     if (this.panel.state == "open") {
@@ -269,9 +269,7 @@ const PanelUI = {
   },
 
   /**
-   * Opens the menu panel. If the event target has a child with the
-   * toolbarbutton-icon attribute, the panel will be anchored on that child.
-   * Otherwise, the panel is anchored on the event target itself.
+   * Opens the menu below the full app menu button.
    *
    * @param {?Event} aEvent - The event (if any) that triggers showing the menu.
    */
@@ -292,13 +290,7 @@ const PanelUI = {
         domEvent = aEvent;
       }
 
-      // We try to use the event.target to account for clicks triggered
-      // from the #button-chat-appmenu. In case the opening of the menu isn't
-      // triggered by a click event, fallback to the main menu button as anchor.
-      const anchor = this._getPanelAnchor(
-        aEvent ? aEvent.target : this.menuButton
-      );
-      await PanelMultiView.openPopup(this.panel, anchor, {
+      await PanelMultiView.openPopup(this.panel, this.menuButton, {
         triggerEvent: domEvent,
       });
     })().catch(console.error);

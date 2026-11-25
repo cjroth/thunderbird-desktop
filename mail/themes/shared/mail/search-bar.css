@@ -105,3 +105,23 @@ div {
     display: flex;
   }
 }
+
+:host(global-search-bar) {
+  --search-padding: 8px;
+
+  & input {
+    padding-inline: 2.65em 0.75em;
+    border-radius: 8px;
+    font-family: var(--desk-font);
+  }
+
+  & div {
+    inset-inline: 2.65em 0.75em;
+  }
+
+  & #search-button {
+    inset-inline: 4px auto;
+    padding-inline: 5px;
+    color: var(--search-bar-color);
+  }
+}

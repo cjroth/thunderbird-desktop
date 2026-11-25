@@ -97,7 +97,7 @@ add_task(async function testDisplay() {
   const detailsPane = abDocument.getElementById("detailsPane");
 
   const viewContactName = abDocument.getElementById("viewContactName");
-  const viewPrimaryEmail = abDocument.getElementById("viewPrimaryEmail");
+  const affiliation = abDocument.getElementById("viewContactAffiliation");
   const editButton = abDocument.getElementById("editButton");
 
   const emailAddressesSection = abDocument.getElementById("emailAddresses");
@@ -121,7 +121,7 @@ add_task(async function testDisplay() {
 
   // Header.
   Assert.equal(viewContactName.textContent, "");
-  Assert.equal(viewPrimaryEmail.textContent, "");
+  Assert.equal(affiliation.textContent, "");
 
   // Action buttons.
   await checkActionButtons();
@@ -143,7 +143,7 @@ add_task(async function testDisplay() {
 
   // Header.
   Assert.equal(viewContactName.textContent, "basic person");
-  Assert.equal(viewPrimaryEmail.textContent, "basic@invalid");
+  Assert.ok(BrowserTestUtils.isHidden(affiliation));
 
   // Test copying of display pane contents.
   SpecialPowers.cleanupAllClipboard();
@@ -158,7 +158,7 @@ add_task(async function testDisplay() {
   SpecialPowers.cleanupAllClipboard();
   await TestUtils.waitForTick();
 
-  selection.selectAllChildren(viewPrimaryEmail);
+  selection.selectAllChildren(emailAddressesSection.querySelector("a"));
   const copiedEmail = await copyByKeyboard();
   Assert.equal(copiedEmail, "basic@invalid");
 
@@ -199,7 +199,8 @@ add_task(async function testDisplay() {
 
   // Header.
   Assert.equal(viewContactName.textContent, "complex person");
-  Assert.equal(viewPrimaryEmail.textContent, "primary@invalid");
+  Assert.equal(affiliation.textContent, "senior engineering lead · engineering · thunderbird");
+  Assert.equal(abDocument.getElementById("viewContactInitials").shadowRoot.querySelector("span").textContent, "CP");
 
   // Action buttons.
   await checkActionButtons(
@@ -365,7 +366,7 @@ add_task(async function testDisplay() {
   // Other sections.
   Assert.ok(BrowserTestUtils.isVisible(otherInfoSection));
   items = otherInfoSection.querySelectorAll("li");
-  Assert.equal(items.length, 6, "number of <li> in section should be correct");
+  Assert.equal(items.length, 4, "number of <li> in section should be correct");
   Assert.equal(
     items[0].children[0].dataset.l10nId,
     "about-addressbook-entry-name-birthday"
@@ -379,36 +380,20 @@ add_task(async function testDisplay() {
 
   Assert.equal(
     items[2].children[0].dataset.l10nId,
-    "about-addressbook-entry-name-title"
-  );
-  Assert.equal(items[2].children[1].textContent, "senior engineering lead");
-  Assert.equal(
-    items[3].children[0].dataset.l10nId,
     "about-addressbook-entry-name-role"
   );
-  Assert.equal(items[3].children[1].textContent, "sheriff");
+  Assert.equal(items[2].children[1].textContent, "sheriff");
   Assert.equal(
-    items[4].children[0].dataset.l10nId,
-    "about-addressbook-entry-name-organization"
-  );
-  Assert.deepEqual(
-    Array.from(
-      items[4].querySelector(".entry-value").childNodes,
-      n => n.textContent
-    ),
-    ["engineering", " • ", "thunderbird"]
-  );
-  Assert.equal(
-    items[5].children[0].dataset.l10nId,
+    items[3].children[0].dataset.l10nId,
     "about-addressbook-entry-name-time-zone"
   );
-  Assert.equal(items[5].children[1].firstChild.nodeValue, "Pacific/Auckland");
+  Assert.equal(items[3].children[1].firstChild.nodeValue, "Pacific/Auckland");
   Assert.equal(
-    items[5].children[1].lastChild.getAttribute("is"),
+    items[3].children[1].lastChild.getAttribute("is"),
     "active-time"
   );
   Assert.equal(
-    items[5].children[1].lastChild.getAttribute("tz"),
+    items[3].children[1].lastChild.getAttribute("tz"),
     "Pacific/Auckland"
   );
   Assert.ok(BrowserTestUtils.isHidden(selectedCardsSection));
@@ -422,7 +407,7 @@ add_task(async function testDisplay() {
 
   // Header.
   Assert.equal(viewContactName.textContent, "");
-  Assert.equal(viewPrimaryEmail.textContent, "");
+  Assert.equal(affiliation.textContent, "");
 
   // Action buttons.
   await checkActionButtons();
@@ -824,7 +809,7 @@ add_task(async function testGoogleEscaping() {
   const detailsPane = abDocument.getElementById("detailsPane");
 
   const viewContactName = abDocument.getElementById("viewContactName");
-  const viewPrimaryEmail = abDocument.getElementById("viewPrimaryEmail");
+  const affiliation = abDocument.getElementById("viewContactAffiliation");
   const editButton = abDocument.getElementById("editButton");
 
   const emailAddressesSection = abDocument.getElementById("emailAddresses");
@@ -850,7 +835,6 @@ add_task(async function testGoogleEscaping() {
 
   // Header.
   Assert.equal(viewContactName.textContent, "en\\c:oding test");
-  Assert.equal(viewPrimaryEmail.textContent, "");
 
   // Action buttons.
   await checkActionButtons();
@@ -908,16 +892,10 @@ add_task(async function testGoogleEscaping() {
   // Instant messaging section.
   Assert.ok(BrowserTestUtils.isHidden(imppSection));
 
-  // Other sections.
-  Assert.ok(BrowserTestUtils.isVisible(otherInfoSection));
-  items = otherInfoSection.querySelectorAll("li");
-  Assert.equal(items.length, 1);
+  // The title is presented in the header.
+  Assert.ok(BrowserTestUtils.isHidden(otherInfoSection));
   Assert.equal(
-    items[0].children[0].dataset.l10nId,
-    "about-addressbook-entry-name-title"
-  );
-  Assert.equal(
-    items[0].children[1].textContent,
+    affiliation.textContent,
     "title:title;title,title\\title\\:title\\;title\\,title\\\\"
   );
 

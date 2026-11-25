@@ -1003,7 +1003,7 @@ var CustomTitlebar = {
         }
         break;
       case "resize": {
-        // The spaces toolbar needs special styling for the fullscreen mode.
+        // Recalculate which extension spaces fit in the window header.
         gSpacesToolbar.onWindowResize();
         if (window.fullScreen || aEvent.target != window) {
           break;

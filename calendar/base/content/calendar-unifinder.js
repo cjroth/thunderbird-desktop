@@ -32,10 +32,14 @@ function toggleUnifinder() {
   goToggleToolbar("bottom-events-box", "calendar_show_unifinder_command");
   goToggleToolbar("calendar-view-splitter", "calShowUnifinder");
 
+  document.getElementById("calendarFindEvents").ariaExpanded = String(wasHidden);
   if (wasHidden) {
     // It's now visible, activate the view.
     getUnifinderView().activate();
     refreshUnifinderFilterInterval();
+    document.getElementById("unifinder-search-field").focus();
+  } else {
+    document.getElementById("calendarFindEvents").focus();
   }
 }
 
@@ -54,6 +58,9 @@ function getUnifinderTree() {
  * function is used to add observers, event listeners, etc.
  */
 async function prepareCalendarUnifinder() {
+  document.getElementById("calendarFindEvents").ariaExpanded = String(
+    !document.getElementById("bottom-events-box").hidden
+  );
   const filteredView = new CalendarFilteredTreeView();
   filteredView.itemType = Ci.calICalendar.ITEM_FILTER_TYPE_EVENT;
 

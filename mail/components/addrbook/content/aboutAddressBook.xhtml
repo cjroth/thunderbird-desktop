@@ -46,20 +46,11 @@
 </head>
 <body>
   <div id="booksPane">
+    <h1 class="books-pane-title" data-l10n-id="about-addressbook-title"></h1>
     <div id="booksPaneHeaderBar" class="sidebar-panel-header">
-      <button id="booksPaneCreateBook"
-              class="button button-flat icon-button icon-only"
-              data-l10n-id="books-pane-add-book-button"
-              type="button">
-      </button>
       <button id="booksPaneCreateContact"
               class="button button-primary icon-button"
               data-l10n-id="books-pane-create-contact-button"
-              type="button">
-      </button>
-      <button id="booksPaneCreateList"
-              class="button button-flat icon-button icon-only"
-              data-l10n-id="books-pane-create-list-button"
               type="button">
       </button>
     </div>
@@ -80,6 +71,16 @@
       </li>
     </ul>
     <div class="books-pane-bottom">
+      <button id="booksPaneCreateBook"
+              class="button button-flat icon-button icon-only"
+              data-l10n-id="books-pane-add-book-button"
+              type="button">
+      </button>
+      <button id="booksPaneCreateList"
+              class="button button-flat icon-button icon-only"
+              data-l10n-id="books-pane-create-list-button"
+              type="button">
+      </button>
       <button id="booksPaneImport"
               class="button button-flat icon-button"
               data-l10n-id="books-pane-import-button"
@@ -114,6 +115,7 @@
       resize-direction="horizontal"
       resize-id="booksPane"/>
   <div id="cardsPane">
+    <h1 id="contactsHeading" data-l10n-id="about-addressbook-contacts-heading"></h1>
     <div id="cardsPaneHeader">
 #include ../../../base/content/widgets/search-bar.inc.xhtml
       <search-bar id="searchInput" data-l10n-attrs="label, placeholder">
@@ -155,10 +157,11 @@
       <header>
         <div class="contact-header">
           <img id="viewContactPhoto" class="contact-photo" alt="" />
+          <contact-avatar id="viewContactInitials" aria-hidden="true"></contact-avatar>
           <div class="contact-headings">
             <h1 id="viewContactName" class="contact-heading-name"></h1>
             <p id="viewContactNickName" class="contact-heading-nickname"></p>
-            <p id="viewPrimaryEmail" class="contact-heading-email"></p>
+            <p id="viewContactAffiliation" class="contact-heading-affiliation"></p>
           </div>
         </div>
         <div class="list-header">

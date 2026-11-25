@@ -260,8 +260,8 @@ treechildren::-moz-tree-line(selected, focus) {
 }
 
 @media (-moz-mac-rtl) {
-  #unifiedToolbarContainer:-moz-locale-dir(rtl) {
-    flex-direction: row-reverse;
+  #unifiedToolbarContainer:-moz-locale-dir(rtl) .titlebar-buttonbox-container {
+    order: 0;
   }
 }
 

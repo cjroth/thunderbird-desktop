@@ -4,6 +4,10 @@
 
 ## Message List Header Bar
 
+thread-pane-message-status =
+  .aria-label = Filter messages by status
+thread-pane-scope-all = All
+
 quick-filter-button =
   .title = Toggle the Quick Filter Bar
 quick-filter-button-label = Quick Filter
@@ -191,6 +195,27 @@ quick-filter-bar-gloda-upsell-line1 = Continue this search across all folders
 quick-filter-bar-gloda-upsell-line2 = Press ‘Enter’ again to continue your search for: { $text }
 
 ## Folder pane
+
+folder-pane-compose-action = Compose
+
+folder-pane-compose-command =
+  .title = Compose a new message
+  .aria-keyshortcuts =
+    { PLATFORM() ->
+        [macos] Meta+N
+       *[other] Control+N
+    }
+
+folder-pane-compose-shortcut =
+    { PLATFORM() ->
+        [macos] ⌘N
+       *[other] Ctrl+N
+    }
+
+# The name of the account identity displayed at the bottom of the folder pane.
+folder-pane-account-settings =
+  .title = Account settings for { $name }
+  .aria-label = Account settings for { $name }
 
 folder-pane-get-messages-button =
   .title = Get Messages
@@ -708,6 +733,9 @@ threadpane-card-menu-button =
 message-list-placeholder-no-messages = No message found
 
 message-list-placeholder-multiple-folders = Multiple folders selected
+
+message-reader-select-message = Select a message to read
+message-reader-open-first = Open first message
 
 ## Folder pane context menu
 

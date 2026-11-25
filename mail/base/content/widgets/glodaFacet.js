@@ -146,6 +146,8 @@
    * @augments {HTMLElement}
    */
   class MozFacetResultsMessage extends HTMLElement {
+    #nextRowId = 0;
+
     connectedCallback() {
       if (this.messagesNode) {
         return;
@@ -162,14 +164,46 @@
       }
       const rows = document.createDocumentFragment();
       for (let index = appendFrom; index < messages.length; index++) {
-        const row = document.createElement("facet-result-message");
-        row.id = "message-result-" + index;
-        row.message = messages[index];
-        row.classList.add("message");
-        row.setAttribute("role", "listitem");
-        rows.appendChild(row);
+        rows.appendChild(this.#createRow(messages[index]));
       }
       this.messagesNode.appendChild(rows);
+    }
+
+    #createRow(message) {
+      const row = document.createElement("facet-result-message");
+      row.id = "message-result-" + this.#nextRowId++;
+      row.message = message;
+      row.classList.add("message");
+      row.setAttribute("role", "listitem");
+      return row;
+    }
+
+    /**
+     * Reorder the visible page after asynchronous ranking. Moving a row keeps
+     * an open disclosure and keyboard focus attached to the same message.
+     *
+     * @param {GlodaMessage[]} messages - The filtered results in their new order.
+     */
+    reorderMessages(messages) {
+      const list = this.messagesNode;
+      const visible = list.childElementCount;
+      const rows = new Map(Array.from(list.children, row => [row.message, row]));
+      for (const [i, message] of messages.slice(0, visible).entries()) {
+        const next = list.children[i];
+        const row = rows.get(message);
+        if (!row) {
+          list.insertBefore(this.#createRow(message), next);
+        } else if (row != next) {
+          list.moveBefore(row, next);
+        }
+      }
+      while (list.childElementCount > visible) {
+        const row = list.lastElementChild;
+        if (row.contains(document.activeElement)) {
+          document.getElementById("showMore").focus({ preventScroll: true });
+        }
+        row.remove();
+      }
     }
   }
 

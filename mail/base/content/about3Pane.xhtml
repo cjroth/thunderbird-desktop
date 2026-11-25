@@ -66,31 +66,40 @@
   <div id="folderPane" class="collapsed-by-splitter" tabindex="-1">
     <img is="drop-indicator" id="dropIndicator" horizontal="horizontal" />
     <div id="folderPaneHeaderBar" class="sidebar-panel-header" hidden="hidden">
-# Force a reverse tabindex to work alongside the `flex-direction: row-reverse`
-# in order to guarantee a consistent end alignment of the `#folderPaneMoreButton`.
-      <button id="folderPaneMoreButton"
-              class="button button-flat icon-button icon-only"
-              data-l10n-id="folder-pane-more-menu-button"
-              type="button"
-              tabindex="3"></button>
       <button id="folderPaneWriteMessage"
               class="button button-primary icon-button"
-              data-l10n-id="folder-pane-write-message-button"
+              data-l10n-id="folder-pane-compose-command"
               type="button"
-              tabindex="2"
-              disabled="disabled"></button>
+              disabled="disabled">
+        <span data-l10n-id="folder-pane-compose-action"></span>
+        <kbd data-l10n-id="folder-pane-compose-shortcut" aria-hidden="true"></kbd>
+      </button>
+      <h2 class="folder-pane-title" data-l10n-id="folder-pane-header-label"></h2>
       <button id="folderPaneGetMessages"
               class="button button-flat icon-button icon-only"
               data-l10n-id="folder-pane-get-messages-button"
               type="button"
-              tabindex="1"
               disabled="disabled"></button>
+      <button id="folderPaneMoreButton"
+              class="button button-flat icon-button icon-only"
+              data-l10n-id="folder-pane-more-menu-button"
+              type="button"></button>
     </div>
     <ul id="folderTree"
         is="tree-listbox"
         role="tree"
         class="sidebar-panel-scroll"
         aria-multiselectable="true"></ul>
+    <button id="folderPaneAccount"
+            class="folder-pane-account"
+            type="button"
+            hidden="hidden">
+      <span class="folder-account-avatar" aria-hidden="true"></span>
+      <span class="folder-account-details">
+        <strong class="folder-account-name"></strong>
+        <span class="folder-account-address"></span>
+      </span>
+    </button>
     <template id="modeTemplate">
       <li class="unselectable">
         <div class="mode-container">
@@ -152,6 +161,14 @@
                 data-l10n-id="thread-pane-header-display-button"
                 type="button">
         </button>
+      </div>
+      <div class="mail-scopes" role="group" data-l10n-id="thread-pane-message-status">
+        <button type="button" data-mail-scope="all" aria-pressed="true"
+                data-l10n-id="thread-pane-scope-all"></button>
+        <button type="button" data-mail-scope="unread" aria-pressed="false"
+                data-l10n-id="quick-filter-bar-unread-label"></button>
+        <button type="button" data-mail-scope="starred" aria-pressed="false"
+                data-l10n-id="quick-filter-bar-starred-label"></button>
       </div>
     </div>
 #include quickFilterBar.inc.xhtml
@@ -301,16 +318,15 @@
     <template id="threadPaneCardTemplate">
       <td>
         <div class="card-container">
-          <div class="thread-card-column read-status-column">
-            <img class="read-status" src="" alt="" />
-          </div>
           <div class="thread-card-column">
             <div class="thread-card-row">
+              <span class="sender-monogram" aria-hidden="true"></span>
               <span class="account-indicator"></span>
               <span class="sender"></span>
               <img class="state replied" src="" data-l10n-id="threadpane-message-replied" />
               <img class="state forwarded" src="" data-l10n-id="threadpane-message-forwarded" />
               <img class="state redirected" src="" data-l10n-id="threadpane-message-redirected" />
+              <img class="read-status" src="" alt="" />
               <span class="date"></span>
               <button type="button"
                       class="button icon-button icon-only tree-button-more"
@@ -333,6 +349,7 @@
               <div class="thread-card-subject-container">
                 <span class="subject"></span>
               </div>
+              <span class="message-excerpt"></span>
               <div class="thread-card-icon-info">
                 <img class="attachment-icon" src="" data-l10n-id="tree-list-view-row-attach" />
                 <thread-card-tags></thread-card-tags>

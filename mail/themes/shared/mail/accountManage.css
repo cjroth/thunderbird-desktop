@@ -20,10 +20,12 @@
 
 #containerBox {
   inline-size: 100%;
-  max-inline-size: 800px;
-  min-inline-size: 600px;
-  padding-block: 40px;
-  padding-inline: 24px 28px;
+  max-inline-size: 58rem;
+  min-inline-size: min(100%, 32rem);
+  padding-block: clamp(20px, 4vw, 48px);
+  padding-inline: clamp(16px, 4vw, 56px);
+  margin-inline: auto;
+  box-sizing: border-box;
 }
 
 fieldset {
@@ -386,9 +388,11 @@ richlistitem[default="true"],
   overflow: hidden;
   align-self: center;
   margin-inline-start: 0;
-  font-size: 1.46em;
-  font-weight: 300;
-  line-height: 1.3em;
+  font-family: var(--desk-font);
+  letter-spacing: -0.035em;
+  font-size: clamp(1.6rem, 2.7vw, 2.45rem);
+  font-weight: 675;
+  line-height: 1.16;
   color: var(--color-text-base);
 
   &::before {

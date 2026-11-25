@@ -94,7 +94,7 @@ async function assertLocalizedElement(doc, selector, id, attributes = []) {
   }
 }
 
-add_task(async function test_localizesTabTitle() {
+add_task(async function test_localizesTabTitleAndHeading() {
   const doc = accountsTab.browser.contentDocument;
   await doc.l10n.ready;
 
@@ -102,6 +102,11 @@ add_task(async function test_localizesTabTitle() {
     doc.l10n.getAttributes(doc.querySelector("title")).id,
     "account-manager-document-title",
     "The Accounts tab title should use the Accounts ID"
+  );
+  await assertLocalizedElement(
+    doc,
+    "#accountTreeBox h1",
+    "account-manager-document-title"
   );
 });
 

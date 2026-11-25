@@ -72,8 +72,8 @@ body {
   text-shadow: none;
 
   display: grid;
-  --folderPaneSplitter-width: 18em;
-  --messagePaneSplitter-width: 54em;
+  --folderPaneSplitter-width: clamp(10.5em, 16vw, 16em);
+  --messagePaneSplitter-width: clamp(18em, 51vw, 68em);
   --messagePaneSplitter-height: 36em;
 
   /* Classic layout: folder tree on the left, thread tree and message browser on the right. */
@@ -117,9 +117,73 @@ body {
   }
 }
 
+.reader-placeholder {
+  display: none;
+}
+
+#messagePane:not(:has(> :is(#webBrowser, #messageBrowser, #multiMessageBrowser, conversation-view):not([hidden]))) .reader-placeholder {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  flex: 1;
+  color: var(--desk-ink);
+  text-align: center;
+
+  & p {
+    font: 550 clamp(1.35rem, 2vw, 1.8rem)/1.2 var(--desk-font);
+    letter-spacing: -0.035em;
+    margin: 4px 14px 0;
+    text-wrap: balance;
+  }
+}
+
+.reader-placeholder-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  inline-size: 60px;
+  block-size: 76px;
+  border: 1px solid var(--desk-line);
+  border-radius: 7px;
+  background: var(--desk-surface);
+  box-shadow: 0 3px 8px color-mix(in srgb, var(--desk-ink) 8%, transparent);
+  transform: rotate(-7deg);
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 7px -10px -5px 9px;
+    border-radius: 6px;
+    border: 1px solid var(--desk-line);
+    background:
+      linear-gradient(var(--desk-accent), var(--desk-accent)) 11px 15px / 16px 3px,
+      linear-gradient(var(--desk-line), var(--desk-line)) 11px 27px / 35px 2px,
+      linear-gradient(var(--desk-line), var(--desk-line)) 11px 34px / 28px 2px,
+      linear-gradient(var(--desk-line), var(--desk-line)) 11px 41px / 31px 2px,
+      var(--desk-surface);
+    background-repeat: no-repeat;
+    transform: rotate(12deg);
+    box-shadow: 0 3px 8px color-mix(in srgb, var(--desk-ink) 8%, transparent);
+  }
+}
+
+.reader-open-first {
+  border-radius: 8px;
+  padding: 6px 13px;
+  color: var(--desk-accent);
+  font-weight: 600;
+}
+
+#threadPane:has(#threadTree slot.show) ~ #messagePane .reader-open-first,
+body.account-central .reader-open-first {
+  display: none;
+}
+
 /* Different layouts */
 
 #folderPane {
+  container: folders / inline-size;
   grid-area: folders;
   box-sizing: border-box;
   /* Matches the collapse-width on the splitter. */
@@ -157,7 +221,20 @@ body {
 #messagePane {
   grid-area: message;
   box-sizing: border-box;
-  background-color: var(--layout-background-1);
+  background: var(--desk-canvas);
+
+  &:has(> #messageBrowser:not([hidden])) {
+    padding: clamp(9px, 1.65vw, 26px);
+  }
+
+  & > #messageBrowser {
+    min-block-size: 0;
+    border-radius: 12px;
+    overflow: clip;
+    border: 1px solid var(--desk-line);
+    background-color: var(--desk-surface);
+    box-shadow: 0 2px 6px color-mix(in srgb, var(--desk-ink) 6%, transparent);
+  }
   /* Matches the collapse-height and collapse-width on the splitter. */
   min-block-size: 100px;
   min-inline-size: 300px;
@@ -188,8 +265,22 @@ body {
 /* Folder tree pane. */
 
 #folderPaneHeaderBar {
-  flex-direction: row-reverse;
+  --sidebar-header-spacing: 22px 14px 5px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 3px;
   background-color: var(--sidebar-background);
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.folder-pane-title {
+  margin: 0;
+  padding-inline-start: 4px;
+  font: 600 0.83rem/1.4 var(--desk-font, system-ui);
+  color: var(--desk-muted, currentColor);
 }
 
 #folderPaneGetMessages,
@@ -217,11 +308,154 @@ body {
 }
 
 #folderPaneWriteMessage {
-  background-image: var(--folder-pane-icon-new);
+  grid-column: 1 / -1;
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-inline-size: 0;
+  min-block-size: 41px;
+  margin: 0 0 19px;
+  border-radius: 10px;
+  background-image: none;
+  padding-inline: 13px;
+  text-align: start;
+  font-weight: 600;
+
+  &[hidden] {
+    display: none;
+  }
+
+  &::before {
+    flex: none;
+    content: "";
+    inline-size: 16px;
+    block-size: 16px;
+    -moz-context-properties: fill, stroke;
+    fill: transparent;
+    stroke: currentColor;
+    background: var(--icon-pencil) center / contain no-repeat;
+  }
+
+  & > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  & kbd {
+    margin-inline-start: auto;
+    padding: 1px 4px;
+    border: 1px solid color-mix(in srgb, currentColor 32%, transparent);
+    border-radius: 4px;
+    font: 500 0.75rem/1.4 var(--desk-font, system-ui);
+  }
+}
+
+.folder-pane-account {
+  appearance: none;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-inline-size: 0;
+  margin: auto 10px 10px;
+  padding: 11px 5px;
+  border: 0;
+  border-block-start: 1px solid var(--desk-line);
+  color: inherit;
+  background: transparent;
+  text-align: start;
+  font: inherit;
+
+  &[hidden] {
+    display: none;
+  }
+
+  &::after {
+    content: "";
+    inline-size: 16px;
+    block-size: 16px;
+    -moz-context-properties: fill, stroke;
+    stroke: var(--desk-muted);
+    fill: transparent;
+    background: var(--icon-settings) center / contain no-repeat;
+  }
+
+  &:hover {
+    background-color: var(--desk-accent-soft);
+  }
+
+  &:focus-visible {
+    outline: var(--focus-outline);
+    outline-offset: -2px;
+  }
+}
+
+.folder-account-avatar {
+  inline-size: 30px;
+  block-size: 30px;
+  display: grid;
+  place-items: center;
+  background-color: var(--desk-ink);
+  color: var(--desk-surface);
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+.folder-account-details {
+  display: grid;
+  min-inline-size: 0;
+  gap: 2px;
+
+  & > * {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+.folder-account-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.folder-account-address {
+  color: var(--desk-muted);
+  font-size: 0.8rem;
 }
 
 #folderTree {
   overflow-y: auto;
+  min-block-size: 0;
+  padding-block: 3px 16px;
+  --listbox-border-radius: 7px;
+
+  & .container {
+    min-block-size: 33px;
+    margin-inline: 9px;
+    padding-inline-start: calc(max(0, var(--depth) - 1) * 12px);
+  }
+
+  & .name {
+    margin-inline: 8px 4px;
+  }
+
+  & li[data-server-type] > .container {
+    margin-block-start: 8px;
+  }
+
+  & li[data-server-type] > .container > .name {
+    font-size: 0.9rem;
+    font-weight: 650;
+  }
+
+  :root[uidensity="compact"] & .container {
+    min-block-size: 23px;
+  }
+
+  :root[uidensity="touch"] & .container {
+    min-block-size: 38px;
+  }
 
   &,
   & ul {
@@ -484,6 +718,84 @@ body {
         fill var(--transition-duration) ease,
         stroke var(--transition-duration) ease;
     }
+  }
+}
+
+@media (prefers-contrast: no-preference) and (forced-colors: none) {
+  :root:not([lwt-tree]) #folderPane {
+    --sidebar-background: var(--desk-sidebar);
+    --sidebar-color: var(--desk-ink);
+    --list-container-background-selected: var(--desk-accent-soft);
+    --list-container-background-selected-current: var(--desk-accent-soft);
+    --list-container-background-selected-focused: var(--desk-accent-soft);
+    --list-container-background-selected-current-focused: var(--desk-accent-soft);
+    --list-container-border-selected: transparent;
+    --list-container-border-selected-current: transparent;
+    --list-container-border-selected-focused: var(--desk-accent);
+    --list-container-border-selected-current-focused: var(--desk-accent);
+    --list-container-background-hover: color-mix(in srgb, var(--desk-accent) 8%, transparent);
+    --list-container-border-hover: transparent;
+    --folderpane-unread-count-background: var(--desk-accent-soft);
+    --folderpane-unread-count-text: var(--desk-accent);
+    --folderpane-unread-new-count-background: var(--desk-accent-soft);
+    --new-folder-color: var(--desk-accent);
+    --folder-color-folder: var(--desk-muted);
+    --folder-color-draft: var(--desk-muted);
+    --folder-color-sent: var(--desk-muted);
+    --folder-color-archive: var(--desk-muted);
+    --folder-color-template: var(--desk-muted);
+    --folder-color-trash: var(--desk-muted);
+
+    & #folderPaneWriteMessage:enabled:not(:hover, :active) {
+      color: var(--desk-on-accent);
+      background-color: var(--desk-accent);
+      border-color: transparent;
+    }
+
+    & #folderTree li.selected > .container > .name {
+      color: var(--desk-accent);
+      font-weight: 650;
+    }
+  }
+}
+
+@container folders (width < 150px) {
+  #folderPaneHeaderBar {
+    --sidebar-header-spacing: 8px 3px 3px;
+  }
+
+  #folderPaneWriteMessage {
+    padding-inline: 10px;
+  }
+
+  #folderPaneWriteMessage kbd,
+  .folder-pane-account::after {
+    display: none;
+  }
+
+  #folderTree .container {
+    margin-inline: 2px;
+  }
+
+  .folder-pane-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+@container folders (width < 185px) {
+  #folderPaneWriteMessage kbd {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  #messagePane:has(> #messageBrowser:not([hidden])) {
+    padding: 6px;
+  }
+
+  .layout-vertical :is(#threadPane, #messagePane) {
+    min-inline-size: 220px;
   }
 }
 

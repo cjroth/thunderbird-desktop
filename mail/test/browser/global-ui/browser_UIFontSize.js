@@ -58,10 +58,11 @@ add_setup(async function () {
 });
 
 add_task(async function testInitialization() {
-  Assert.notEqual(
-    UIFontSize.osValue,
-    0,
-    "Attaching to the first window should initialize the OS value"
+  Assert.greater(UIFontSize.osValue, 0, "The platform size is initialized");
+  Assert.greaterOrEqual(
+    UIFontSize.defaultSize,
+    14,
+    "The default chrome size should respect the reading baseline"
   );
   Assert.equal(UIFontSize.prefValue, 7, "Pref value should be attached");
   Assert.notEqual(
@@ -143,7 +144,7 @@ add_task(async function testAppMenuGlobalFontSizeInteraction() {
   await waitForL10n();
   Assert.equal(
     appMenu.querySelector("#appMenu-fontSizeReset-button > label").value,
-    `${UIFontSize.osValue}px`,
+    `${UIFontSize.defaultSize}px`,
     "The value in the app menu should be reset to the correct default"
   );
   Assert.ok(!UIFontSize.isEdited, "isEdited should be false after resetting");

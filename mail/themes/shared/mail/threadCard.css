@@ -70,7 +70,16 @@
 }
 
 #threadTree[rows="thread-card"] {
-  padding-block: 2px;
+  padding-block: 4px;
+  --avatar-size: 22px;
+
+  :root[uidensity="compact"] & {
+    --avatar-size: 18px;
+  }
+
+  :root[uidensity="touch"] & {
+    --avatar-size: 25px;
+  }
 
   /* Default Card */
   & .card-layout {
@@ -82,16 +91,8 @@
       --read-status-fill: var(--unread-indicator-fill);
       --read-status-stroke: var(--unread-indicator-stroke);
 
-      & .card-container {
-        box-shadow: var(--shadow-1);
-
-        & :is(.sender, .subject) {
-          font-weight: bold;
-        }
-      }
-
-      &:not(.selected, :hover, :focus, :focus-within) {
-        --tree-card-background: var(--color-surface-raised);
+      & .card-container .subject {
+        font-weight: 700;
       }
 
       /* New Message */
@@ -236,6 +237,8 @@
     }
 
     & td {
+      padding-inline: var(--tree-card-inline);
+
       & button {
         min-block-size: 16px;
         min-inline-size: 16px;
@@ -300,19 +303,23 @@
       }
 
       & .card-container {
-        display: grid;
-        grid-template-columns: auto 1fr;
+        display: flex;
+        align-items: center;
+        padding-inline: clamp(9px, 3cqi, 16px);
+        border-radius: 9px;
         box-sizing: border-box;
         position: relative;
         overflow: visible;
         isolation: isolate;
 
         & .thread-card-column {
+          flex: 1;
           display: flex;
           flex-direction: column;
           gap: var(--thread-pane-container-gap);
           box-sizing: border-box;
           position: relative;
+          min-inline-size: 0;
           padding-block: var(--thread-pane-container-gap);
         }
 
@@ -331,9 +338,9 @@
         & .thread-card-dynamic-row {
           display: grid;
           grid-template:
-            "subject subject" max-content
-            "button info" minmax(auto, 1fr)
-            / auto 1fr;
+            "subject subject subject" max-content
+            "button preview info" max-content
+            / auto minmax(0, 1fr) auto;
           gap: var(--thread-card-content-gap);
           align-items: center;
           padding: 0;
@@ -348,11 +355,9 @@
           display: none;
         }
 
-        & .read-status-column {
-          inline-size: var(--read-status-size);
-        }
-
         & .read-status {
+          --read-status-size: 12px;
+          flex: none;
           display: var(--read-status-display, none);
           content: var(--read-status-icon);
           block-size: var(--read-status-size);
@@ -362,13 +367,45 @@
           stroke: var(--read-status-stroke);
         }
 
+        & .sender-monogram {
+          display: grid;
+          place-items: center;
+          inline-size: var(--avatar-size);
+          block-size: var(--avatar-size);
+          border-radius: 6px;
+          flex: none;
+          font: 650 0.68rem/1 var(--desk-font, system-ui);
+          background-color: var(--layout-background-2);
+          color: var(--layout-color-1);
+          user-select: none;
+
+          &:empty::after {
+            content: var(--icon-user);
+            -moz-context-properties: fill, stroke;
+            fill: transparent;
+            stroke: currentColor;
+          }
+        }
+
+        & .message-excerpt {
+          grid-area: preview;
+          min-inline-size: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          font-weight: 400;
+          font-size: 0.91rem;
+          color: var(--desk-muted, currentColor);
+        }
+
         & .thread-card-button {
           grid-area: button;
         }
 
         & .thread-card-subject-container {
           grid-area: subject;
-          padding-inline-start: 3px;
+          min-inline-size: 0;
+          display: flex;
         }
 
         & .thread-card-icon-info {
@@ -391,16 +428,23 @@
           white-space: nowrap;
         }
 
+        & .subject {
+          font-size: 1.06rem;
+          font-weight: 550;
+          letter-spacing: -0.018em;
+        }
+
         & .sender {
-          font-weight: 600;
-          font-size: 0.95rem;
+          font-weight: 550;
+          font-size: 0.9rem;
           padding-inline-start: 3px;
         }
 
         & .date {
           flex: 0 0 auto;
           white-space: nowrap;
-          font-size: 0.95rem;
+          font-size: 0.83rem;
+          font-variant-numeric: tabular-nums;
           opacity: 0.85;
         }
 
@@ -470,6 +514,10 @@
 
     & .thread-card-subject-container {
       padding-inline-start: 0;
+    }
+
+    & .message-excerpt {
+      display: none;
     }
 
     & button.twisty::before {
@@ -562,7 +610,7 @@
       --inset-inline-start: 0;
 
       & .read-status,
-      & .thread-card-column:first-of-type,
+      & .message-excerpt,
       & .thread-card-row:first-of-type,
       & .thread-card-icon-info {
         display: none;
@@ -658,5 +706,127 @@
         --tree-card-background: var(--tree-card-background-selected-current-unfocused-hover);
       }
     }
+  }
+}
+
+/* When there's no cached excerpt, keep the subject and message actions on one
+   line and center the two-line card in its fixed-height virtualization slot. */
+#threadTree[rows="thread-card"] .card-layout:not([data-properties~="dummy"]) td .card-container {
+  & .thread-card-dynamic-row:has(.message-excerpt:empty) {
+    grid-template: "button subject info" auto / auto minmax(0, 1fr) auto;
+
+    & .message-excerpt {
+      display: none;
+    }
+  }
+}
+
+@container threadPane (width < 300px) {
+  #threadTree[rows="thread-card"] {
+    --avatar-size: 18px;
+    --read-status-size: 10px;
+    --tree-card-inline: 4px;
+
+    & .card-layout td .card-container {
+      column-gap: 6px;
+      padding-inline: 5px;
+
+      & .date {
+        max-inline-size: 38%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+    }
+  }
+}
+
+@media (prefers-contrast: no-preference) and (forced-colors: none) {
+  :root:not([lwt-tree]) #threadTree[rows="thread-card"] {
+    --tree-pane-background: var(--desk-surface);
+    --tree-card-background: var(--desk-surface);
+    --tree-card-border: transparent;
+    --tree-card-border-hover: transparent;
+    --tree-card-border-focus: var(--desk-accent);
+    --tree-card-border-selected: transparent;
+    --tree-card-border-selected-unfocused: transparent;
+    --tree-card-background-current: var(--desk-canvas);
+    --tree-card-background-current-unfocused: var(--desk-canvas);
+    --tree-card-background-selected: var(--desk-accent-soft);
+    --tree-card-background-selected-unfocused: var(--desk-accent-soft);
+    --tree-card-background-selected-current: var(--desk-accent-soft);
+    --tree-card-background-selected-current-unfocused: var(--desk-accent-soft);
+    --tree-card-background-selected-current-unfocused-hover: var(--desk-accent-soft);
+
+    & .card-layout:not([data-properties~="junk"]) td {
+      --divider: color-mix(in srgb, var(--desk-line) 70%, transparent);
+      background: linear-gradient(var(--divider), var(--divider)) center bottom /
+        calc(100% - 2 * var(--tree-card-inline)) 1px no-repeat;
+    }
+
+    & .card-layout.selected:not([data-properties~="junk"]) .card-container {
+      border-color: color-mix(in srgb, var(--desk-accent) 22%, var(--desk-surface));
+    }
+
+    & .card-layout td .card-container .date {
+      color: var(--desk-muted);
+      opacity: 1;
+    }
+
+    & .card-layout td .card-container .sender-monogram {
+      --avatar-tint: light-dark(#4056a1, #b6c4f2);
+      color: var(--avatar-tint);
+      background-color: color-mix(in srgb, var(--avatar-tint) 13%, var(--desk-surface));
+
+      &[data-tone="1"] {
+        --avatar-tint: light-dark(#705482, #ceb7de);
+      }
+      &[data-tone="2"] {
+        --avatar-tint: light-dark(#406a81, #a4c8db);
+      }
+      &[data-tone="3"] {
+        --avatar-tint: light-dark(#8a5d3e, #e3b38e);
+      }
+      &[data-tone="4"] {
+        --avatar-tint: light-dark(#87555d, #e0adb5);
+      }
+      &[data-tone="5"] {
+        --avatar-tint: light-dark(#626d39, #cbd69c);
+      }
+    }
+  }
+}
+
+/* Reserve the action slots when quiet so interacting with a row never
+   moves its date or reflows its excerpt. Touch keeps both actions visible. */
+@media not (any-pointer: coarse) {
+  :root:not([uidensity="touch"]) #threadTree[rows="thread-card"] .card-layout:not(:hover, :focus-within, .selected, .current) {
+    & td .card-container .tree-button-more,
+    &:not([data-properties~="flagged"]) td .card-container .button-star {
+      opacity: 0;
+    }
+  }
+}
+
+:root:not([lwt-tree]) #threadTree[rows="thread-card"] .card-layout[data-properties~="unread"] {
+  --read-status-fill: var(--desk-accent);
+  --read-status-stroke: var(--desk-accent);
+  --read-status-icon: var(--icon-dot);
+}
+
+@media (forced-colors: active) {
+  #threadTree[rows="thread-card"] .card-layout[data-properties~="unread"] {
+    --read-status-fill: CanvasText;
+    --read-status-stroke: CanvasText;
+
+    &.selected {
+      --read-status-fill: SelectedItemText;
+      --read-status-stroke: SelectedItemText;
+    }
+  }
+}
+
+@media (forced-colors: active) {
+  #threadTree[rows="thread-card"] .sender-monogram {
+    border: 1px solid CanvasText;
   }
 }

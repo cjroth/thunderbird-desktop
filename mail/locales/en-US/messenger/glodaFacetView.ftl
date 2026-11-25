@@ -8,7 +8,7 @@
 item-count-m-of-n = { $m } of { $n }
 
 gloda-semantic-ranking = Ranking matches on this device…
-gloda-semantic-ranked = Relevance is ranked by meaning.
+gloda-semantic-ranked = Ranked by meaning on this device.
 gloda-semantic-fallback = Showing keyword matches. Local ranking is unavailable.
 
 # Variables:

@@ -9,6 +9,10 @@
  *  place in EditorOverride.css, instead of here.
 */
 
+body {
+  line-height: 1.55;
+}
+
 a {
   color-scheme: light dark;
 

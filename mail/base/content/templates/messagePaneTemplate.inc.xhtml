@@ -3,6 +3,13 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 <template id="messagePaneTemplate" xmlns="http://www.w3.org/1999/xhtml">
+  <div class="reader-placeholder">
+    <span class="reader-placeholder-icon" aria-hidden="true"></span>
+    <p data-l10n-id="message-reader-select-message"></p>
+    <button class="button reader-open-first"
+            type="button"
+            data-l10n-id="message-reader-open-first"></button>
+  </div>
   <xul:browser id="webBrowser"
                type="content"
                manualactiveness="true"

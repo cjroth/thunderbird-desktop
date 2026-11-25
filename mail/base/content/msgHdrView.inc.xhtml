@@ -14,7 +14,7 @@
 
 <!-- Header container -->
 <html:header id="messageHeader"
-             class="message-header-container message-header-large-subject message-header-hide-label-column message-header-show-recipient-avatar message-header-show-sender-full-address">
+             class="message-header-container message-header-buttons-adaptive message-header-large-subject message-header-hide-label-column message-header-show-recipient-avatar message-header-show-sender-full-address">
   <!-- From + buttons -->
   <html:div id="headerSenderToolbarContainer"
             class="message-header-row header-row-reverse message-header-wrap">
@@ -117,16 +117,16 @@
         </toolbarbutton>
       </toolbaritem>
 
-      <toolbarbutton id="hdrForwardButton"
-                     label="&hdrForwardButton1.label;"
-                     tooltiptext="&hdrForwardButton1.tooltip;"
-                     oncommand="MsgForwardMessage(event);"
-                     class="toolbarbutton-1 message-header-view-button hdrForwardButton"/>
       <toolbarbutton id="hdrArchiveButton"
                      label="&hdrArchiveButton1.label;"
                      tooltiptext="&hdrArchiveButton1.tooltip;"
                      oncommand="goDoCommand('cmd_archive');"
                      class="toolbarbutton-1 message-header-view-button hdrArchiveButton"/>
+      <toolbarbutton id="hdrForwardButton"
+                     label="&hdrForwardButton1.label;"
+                     tooltiptext="&hdrForwardButton1.tooltip;"
+                     oncommand="MsgForwardMessage(event);"
+                     class="toolbarbutton-1 message-header-view-button hdrForwardButton"/>
       <toolbarbutton id="hdrJunkButton"
                      data-l10n-id="header-spam-button"
                      observes="cmd_markAsJunk"
@@ -570,6 +570,7 @@
                 oncommand="gHeaderCustomize.updateButtonStyle(event);"
                 crop="none">
         <menupopup>
+          <menuitem value="adaptive" data-l10n-id="message-header-button-style-adaptive"/>
           <menuitem value="default" data-l10n-id="message-header-button-style-default"/>
           <menuitem value="only-text" data-l10n-id="message-header-button-style-text"/>
           <menuitem value="only-icons" data-l10n-id="message-header-button-style-icons"/>

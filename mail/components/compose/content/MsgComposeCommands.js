@@ -1247,7 +1247,10 @@ var defaultController = {
         return gMsgCompose && gMsgCompose.composeHTML;
       },
       doCommand() {
+        setComposeFocus(false);
         goToggleToolbar("FormatToolbar", "menu_showFormatToolbar");
+        document.getElementById("composeFormattingButton").ariaExpanded =
+          String(!document.getElementById("FormatToolbar").hidden);
       },
     },
 
@@ -5038,10 +5041,18 @@ async function ComposeStartup() {
   // setEditorType MUST be called before setContentWindow
   if (gMsgCompose.composeHTML) {
     initLocalFontFaceMenu(document.getElementById("FontFacePopup"));
+    const toolbar = document.getElementById("FormatToolbar");
+    if (!Services.xulStore.hasValue(document.URL, "FormatToolbar", "hidden")) {
+      toolbar.hidden = true;
+      document.getElementById("menu_showFormatToolbar").removeAttribute("checked");
+    }
+    document.getElementById("composeFormattingButton").ariaExpanded =
+      String(!toolbar.hidden);
   } else {
     // We are editing in plain text mode, so hide the formatting menus and the
     // output format selector.
     document.getElementById("FormatToolbar").hidden = true;
+    document.getElementById("composeFormattingButton").hidden = true;
     document.getElementById("formatMenu").hidden = true;
     document.getElementById("insertMenu").hidden = true;
     document.getElementById("menu_showFormatToolbar").hidden = true;
@@ -5482,6 +5493,18 @@ async function adjustEncryptAfterIdentityChange(prevIdentity) {
 
   await checkEncryptionState();
   await Enigmail.msg.warnUserOfSenderKeyExpiration();
+}
+
+/**
+ * Keep the live draft and its selection in place while changing the writing layout.
+ *
+ * @param {boolean} active - Whether to use the focused layout.
+ */
+function setComposeFocus(active) {
+  document.getElementById("composeContentBox").toggleAttribute("data-focus-writing", active);
+  const button = document.getElementById("composeFocusButton");
+  button.ariaPressed = String(active);
+  document.l10n.setAttributes(button, active ? "compose-exit-focus-button" : "compose-focus-button");
 }
 
 async function ComposeLoad() {
@@ -6192,6 +6215,7 @@ async function GenericSendMessage(msgType) {
 
   try {
     if (sending) {
+      setComposeFocus(false);
       // Since the onBeforeSend event can manipulate compose details, execute it
       // before the final sanity checks.
       try {

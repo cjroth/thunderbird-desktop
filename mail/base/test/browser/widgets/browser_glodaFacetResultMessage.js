@@ -115,6 +115,40 @@ add_task(function testDetailsKeepEveryRecipientAndAttachment() {
   row.remove();
 });
 
+add_task(function testRankingPreservesTheVisiblePage() {
+  const list = doc.createElement("facet-results-message");
+  const more = doc.createElement("button");
+  more.id = "showMore";
+  doc.body.append(list, more);
+  const messages = ["North", "East", "South"].map(subject => ({
+    subject,
+    from: { value: "author@example.com" },
+    date: new Date(),
+    read: true,
+  }));
+  list.setMessages(messages.slice(0, 2));
+
+  const details = list.messagesNode.firstElementChild.querySelector("details");
+  details.open = true;
+  const disclosure = details.querySelector("summary");
+  disclosure.focus();
+  list.reorderMessages([messages[1], messages[0], messages[2]]);
+  Assert.equal(doc.activeElement, disclosure);
+  Assert.ok(details.open, "The reader's open details stay with their message");
+  Assert.equal(list.messagesNode.lastElementChild.message, messages[0]);
+
+  list.reorderMessages([messages[1], messages[2], messages[0]]);
+  Assert.equal(list.messagesNode.childElementCount, 2);
+  Assert.equal(list.messagesNode.lastElementChild.message, messages[2]);
+  Assert.equal(doc.activeElement, more, "The focused message moved to the next page");
+  list.setMessages([messages[1], messages[2], messages[0]], 2);
+  const ids = Array.from(list.messagesNode.children, row => row.id);
+  Assert.equal(new Set(ids).size, 3, "Every displayed row has a unique accessible ID");
+
+  list.remove();
+  more.remove();
+});
+
 add_task(function testIncompleteRecipientIdentities() {
   const row = renderMessage({
     recipients: [

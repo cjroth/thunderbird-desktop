@@ -58,3 +58,64 @@ notification {
   margin-block: 10px;
   margin-inline: 8px 10px;
 }
+
+#calendar-summary-dialog:has(#calendar-event-summary-dialog) {
+  min-inline-size: min(35em, 550px);
+  font-family: var(--desk-font);
+}
+
+#calendar-event-summary-dialog {
+  --summary-gutter: 1.65rem;
+  color: var(--desk-ink);
+
+  & #event-summary-title {
+    margin: 1.4rem var(--summary-gutter) 0.75rem;
+    font: 650 1.75rem/1.18 var(--desk-font);
+    letter-spacing: -0.045em;
+    overflow-wrap: anywhere;
+    user-select: text;
+  }
+
+  & #calendar-item-summary {
+    margin-inline: 0;
+    padding-inline: var(--summary-gutter);
+  }
+
+  & :is(.item-summary-box > .calendar-caption:first-child, tr:has(> .item-title)) {
+    display: none;
+  }
+
+  & .calendar-summary-table {
+    border-spacing: 0 0.36rem;
+
+    & th {
+      color: var(--desk-muted);
+      text-align: start;
+      padding-inline-end: 1.2rem;
+      font-weight: 500;
+      font-size: 0.91rem;
+    }
+
+    & td {
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+  }
+
+  & #calendar-summary-dialog-custom-button-footer {
+    margin: 1rem 0 0;
+    padding: 0.7rem var(--summary-gutter);
+    border-block-start: 1px solid var(--desk-line);
+    background-color: var(--desk-canvas);
+  }
+
+  & :is(#calendar-summary-dialog-edit-button, #calendar-summary-dialog-edit-menu-button) {
+    min-block-size: 2.25rem;
+  }
+}
+
+@media not (prefers-contrast) {
+  :root:not([lwtheme]) #calendar-event-summary-dialog {
+    background-color: var(--desk-surface);
+  }
+}

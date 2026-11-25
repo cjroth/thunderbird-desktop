@@ -227,6 +227,25 @@ add_task(async function testSwitchToCardsView() {
   about3Pane.folderTree.focus();
 });
 
+add_task(async function test_senderIdentityAndLocalExcerpt() {
+  await ensure_cards_view(document);
+  const row = threadTree.getRowAtIndex(0);
+  const excerpt = row.querySelector(".message-excerpt");
+  const header = about3Pane.gDBView.getMsgHdrAt(row.index);
+  await TestUtils.waitForCondition(
+    () => excerpt.textContent.startsWith("Hello "),
+    "The local message body should supply the card excerpt"
+  );
+  Assert.equal(excerpt.textContent, header.getStringProperty("preview"));
+  Assert.equal(row.getAttribute("aria-describedby"), excerpt.id);
+
+  const sender = row.querySelector(".sender").textContent;
+  const initials = sender.split(" ").map(word => word[0]).join("");
+  const monogram = row.querySelector(".sender-monogram");
+  Assert.equal(monogram.textContent, initials.toUpperCase());
+  Assert.equal(monogram.ariaHidden, "true");
+});
+
 add_task(async function testTagsInVerticalView() {
   await ensure_cards_view(document);
   about3Pane.folderTree.focus();

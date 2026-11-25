@@ -16,6 +16,9 @@ import "chrome://messenger/content/thread-card-tags.mjs";
 class ThreadCard extends TreeViewTableRow {
   static ROW_HEIGHT = 46;
 
+  #previewCallback;
+  #lastPreviewHeader;
+
   connectedCallback() {
     if (this.hasConnected) {
       return;
@@ -33,6 +36,8 @@ class ThreadCard extends TreeViewTableRow {
     this.cardCell = this.querySelector("td");
     this.accountIndicator = this.querySelector(".account-indicator");
     this.senderLine = this.querySelector(".sender");
+    this.monogram = this.querySelector(".sender-monogram");
+    this.excerpt = this.querySelector(".message-excerpt");
     this.subjectLine = this.querySelector(".subject");
     this.dateLine = this.querySelector(".date");
     this.starButton = this.querySelector(".button-star");
@@ -45,6 +50,9 @@ class ThreadCard extends TreeViewTableRow {
 
   fillRow() {
     super.fillRow();
+    cancelIdleCallback(this.#previewCallback);
+    this.excerpt.textContent = "";
+    this.removeAttribute("aria-describedby");
 
     if (this.getAttribute("role") == "row") {
       this.cardCell.setAttribute("role", "gridcell");
@@ -124,7 +132,12 @@ class ThreadCard extends TreeViewTableRow {
 
     this.senderLine.textContent = data.sender;
     this.senderLine.title = data.sender;
+    this.#updateMonogram(data.sender);
+    if (window.threadPane.rowCount === 3) {
+      this.#showPreview(this.view.getMsgHdrAt(this._index));
+    }
     this.dateLine.textContent = data.date;
+    this.dateLine.title = data.date;
 
     this.threadCardTags.setAttribute("tags", data.tagKeys);
 
@@ -197,6 +210,71 @@ class ThreadCard extends TreeViewTableRow {
           .join(", ")
       );
     });
+  }
+
+  disconnectedCallback() {
+    cancelIdleCallback(this.#previewCallback);
+  }
+
+  /**
+   * Render a cached excerpt immediately. Extract missing ones from the local
+   * message store at idle, one virtualized row per callback.
+   *
+   * @param {nsIMsgDBHdr} header - The message occupying this row.
+   */
+  #showPreview(header) {
+    this.excerpt.id = `${this.id}-excerpt`;
+    this.setAttribute("aria-describedby", this.excerpt.id);
+    this.excerpt.textContent = header.getStringProperty("preview");
+    if (this.excerpt.textContent || header === this.#lastPreviewHeader) {
+      return;
+    }
+
+    const index = this.index;
+    this.#previewCallback = requestIdleCallback(() => {
+      if (!this.isConnected || this.index !== index) {
+        return;
+      }
+      const folder = header.folder;
+      const type = folder.server.type;
+      // An IMAP header without its Offline flag would issue a network request.
+      if (
+        !(folder instanceof Ci.nsIMsgLocalMailFolder) &&
+        !(
+          ["imap", "ews", "graph"].includes(type) &&
+          header.flags & Ci.nsMsgMessageFlags.Offline
+        )
+      ) {
+        return;
+      }
+      this.#lastPreviewHeader = header;
+      try {
+        folder.fetchMsgPreviewText([header.messageKey], null);
+        this.excerpt.textContent = header.getStringProperty("preview");
+      } catch (error) {
+        // Mail can move or leave the offline store while the row is queued.
+        console.debug("Local message excerpt unavailable", error);
+      }
+    });
+  }
+
+  /**
+   * Identify a correspondent using their displayed name, including when a
+   * Sent folder shows the recipient instead of the author.
+   *
+   * @param {string} correspondent - The localized correspondent column value.
+   */
+  #updateMonogram(correspondent) {
+    const name = correspondent.split(/[<@,]/u, 1)[0].normalize();
+    const words = name.match(/[\p{L}\p{N}][\p{L}\p{N}\p{M}]*/gu) || [];
+    const first = words[0]?.match(/^.\p{M}*/u)[0] || "";
+    const last = words.length > 1 ? words.at(-1).match(/^.\p{M}*/u)[0] : "";
+    this.monogram.textContent = (first + last).toLocaleUpperCase();
+    const tone = Array.from(name).reduce(
+      (hash, char) => (hash * 31 + char.codePointAt(0)) % 6,
+      0
+    );
+    this.monogram.dataset.tone = String(tone);
   }
 
   #updateTwistyButton() {

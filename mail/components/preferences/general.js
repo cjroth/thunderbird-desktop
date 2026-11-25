@@ -91,6 +91,7 @@ Preferences.addAll([
   { id: "font.language.group", type: "string" },
   { id: "intl.regional_prefs.use_os_locales", type: "bool" },
   { id: "mailnews.database.global.indexer.enabled", type: "bool" },
+  { id: "browser.ml.enable", type: "bool" },
   { id: "mailnews.database.global.search.semantic.enabled", type: "bool" },
   { id: "gloda.show_as_list_by_default", type: "bool" },
   { id: "mailnews.labels.color.1", type: "string" },
@@ -204,6 +205,14 @@ var gGeneralPane = {
     );
 
     this.mPane = document.getElementById("paneGeneral");
+    for (const id of [
+      "browser.ml.enable",
+      "mailnews.database.global.indexer.enabled",
+      "gloda.show_as_list_by_default",
+    ]) {
+      Preferences.get(id).on("change", () => this.updateSemanticSearch());
+    }
+    this.updateSemanticSearch();
     this._handlerTbody = document.querySelector("#handlersTable > tbody");
     this._filter = document.getElementById("filter");
 
@@ -489,6 +498,31 @@ var gGeneralPane = {
     if (!Services.policies.isAllowed("about:config")) {
       document.getElementById("configEditor").disabled = true;
     }
+  },
+
+  /** Reflect the settings required to rank a Global Search by relevance. */
+  updateSemanticSearch() {
+    const ml = Preferences.get("browser.ml.enable");
+    const indexed = Preferences.get("mailnews.database.global.indexer.enabled");
+    const ranking = Preferences.get(
+      "mailnews.database.global.search.semantic.enabled"
+    );
+    let unavailable;
+    if (!ml.value) {
+      unavailable = ml.locked
+        ? "gloda-semantic-search-ml-locked"
+        : "gloda-semantic-search-ml-off";
+    } else if (!indexed.value) {
+      unavailable = "gloda-semantic-search-indexer-off";
+    } else if (Preferences.get("gloda.show_as_list_by_default").value) {
+      unavailable = "gloda-semantic-search-plain-list";
+    }
+
+    ranking.updateControlDisabledState(Boolean(unavailable));
+    document.l10n.setAttributes(
+      document.getElementById("glodaSemanticDescription"),
+      unavailable || "gloda-semantic-search-description"
+    );
   },
 
   /**

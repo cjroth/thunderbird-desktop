@@ -27,6 +27,17 @@ mailattachcount {
 /* :::: message header ::::: */
 
 @media screen {
+  /* The MIME converter owns these wrappers. Sender-authored HTML keeps its
+     original content width and formatting. */
+  body > :is(.moz-text-flowed, .moz-text-plain) {
+    box-sizing: border-box;
+    margin-inline: 0;
+    padding-inline: calc(clamp(16px, 5.5vi, 46px) - 8px);
+    max-inline-size: 76ch;
+    padding-block: clamp(6px, 2vi, 20px);
+    line-height: 1.6;
+  }
+
   .moz-main-header,
   .moz-main-header + br,
   .moz-print-only {
@@ -250,5 +261,15 @@ img {
   }
   a:visited {
     color: VisitedText;
+  }
+}
+
+/* Use the same paper tint under the generated plaintext body and header.
+   Message-authored HTML and the user's dark reader toggle retain ownership
+   of their own color scheme. */
+@media screen and (forced-colors: none) {
+  :root:has(body > :is(.moz-text-flowed, .moz-text-plain)) {
+    color: var(--desk-ink);
+    background-color: var(--desk-surface);
   }
 }

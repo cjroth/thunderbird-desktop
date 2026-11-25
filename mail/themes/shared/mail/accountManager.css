@@ -42,15 +42,16 @@ body {
   display: flex;
   flex-direction: column;
   max-inline-size: 25em;
-  min-inline-size: 18em;
+  min-inline-size: clamp(14em, 20vw, 18em);
   block-size: 100vh;
   box-sizing: border-box;
   background-color: var(--sidebar-background);
-  border-inline-end: none;
+  border-inline-end: 1px solid var(--sidebar-border);
 }
 
 #accountTreeHeaderBar {
-  justify-content: center;
+  justify-content: start;
+  padding-inline: 12px;
   font-size: 1rem;
 }
 
@@ -85,7 +86,7 @@ body {
   }
 
   & > li > div > .name {
-    font-weight: 500;
+    font-weight: 650;
   }
 
   & li {

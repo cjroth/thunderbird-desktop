@@ -48,6 +48,15 @@ async function onLoad() {
   // set the dialog-id to enable the right CSS to be used.
   if (item.isEvent()) {
     setDialogId(dialog, "calendar-event-summary-dialog");
+    const { UIFontSize } = ChromeUtils.importESModule("resource:///modules/UIFontSize.sys.mjs");
+    UIFontSize.registerWindow(window);
+    const title = document.getElementById("event-summary-title");
+    if (item.title) {
+      title.textContent = item.title;
+    } else {
+      document.l10n.setAttributes(title, "event-untitled");
+    }
+    title.hidden = false;
   } else if (item.isTodo()) {
     setDialogId(dialog, "calendar-task-summary-dialog");
   }

@@ -80,8 +80,8 @@ add_task(async function testSemanticSearchFromToolbar() {
       );
       await TestUtils.waitForCondition(
         () =>
-          tab.browser?.contentDocument?.getElementById("showEmpty")?.style
-            .display === "block",
+          tab.browser?.contentDocument?.getElementById("showEmpty")?.hidden ===
+          false,
         "The empty result set should render"
       );
       Assert.ok(
@@ -171,10 +171,12 @@ add_task(async function testSemanticOrderingAfterChangingSort() {
     });
     sortBy("-dascore");
     Assert.equal(status.dataset.state, "ranking");
+    Assert.ok(!status.hidden, "Announce ranking in relevance order");
     Assert.equal(passages.length, 3);
     sortBy("-date");
     resolve([0, 1, 1]);
     await TestUtils.waitForCondition(() => status.dataset.state === "ranked");
+    Assert.ok(status.hidden, "Date order should not advertise relevance ranking");
     Assert.deepEqual(
       subjects(),
       byDate,
@@ -182,6 +184,7 @@ add_task(async function testSemanticOrderingAfterChangingSort() {
     );
 
     sortBy("-dascore");
+    Assert.ok(!status.hidden, "Show the completed ranking in relevance order");
     const expected = [passages[1], passages[2], passages[0]];
     await TestUtils.waitForCondition(() => subjects()[0] === expected[0]);
     Assert.deepEqual(

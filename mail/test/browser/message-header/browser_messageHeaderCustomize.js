@@ -124,7 +124,7 @@ add_task(async function test_customize_toolbar_buttons() {
   // Assert the options are in a default state.
   Assert.equal(
     buttonStyle.value,
-    "default",
+    "adaptive",
     "The buttons style is in the default state"
   );
   const subjectLarge =
@@ -172,6 +172,7 @@ add_task(async function test_customize_toolbar_buttons() {
   // Use the keyboard to open and cycle through the menulist items because the
   // mouse events are unreliable in tests.
   await openMenuPopup();
+  EventUtils.sendKey("down", aboutMessage);
   EventUtils.sendKey("down", aboutMessage);
   EventUtils.sendKey("return", aboutMessage);
 

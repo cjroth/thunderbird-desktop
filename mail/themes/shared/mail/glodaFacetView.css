@@ -11,8 +11,8 @@
 .search-page {
   --section-gap: calc(var(--space-step) * 6);
   --row-padding: calc(var(--space-base) + 2 * var(--space-step));
-  --search-accent: light-dark(var(--color-blue-70), var(--color-blue-30));
-  --match-background: var(--color-primary-soft);
+  --search-accent: var(--desk-accent);
+  --match-background: var(--desk-accent-soft);
   /* These colors are consumed by the SVG timeline. */
   --dateColor: var(--layout-background-3);
   --dateTextColor: var(--layout-color-1);
@@ -25,15 +25,15 @@
   color-scheme: light dark;
   color: var(--layout-color-1);
   background: var(--layout-background-0);
-  font: message-box;
+  font: 1rem/1.45 var(--desk-font);
 }
 
 .search-workspace {
   box-sizing: border-box;
   inline-size: 100%;
-  max-inline-size: 70rem;
+  max-inline-size: 84rem;
   margin-inline: auto;
-  padding-block: clamp(1.5rem, 4vw, 3rem) 2rem;
+  padding-block: clamp(1.5rem, 3vw, 2.75rem) 2rem;
   padding-inline: clamp(0.75rem, 3.5vw, 3rem);
 }
 
@@ -73,18 +73,69 @@
 .search-title {
   margin: 0;
   color: var(--layout-color-0);
-  font-size: 1.625em;
-  font-weight: 600;
-  line-height: 1.25;
+  font-size: clamp(1.7rem, 3vw, 2.5rem);
+  font-weight: 670;
+  letter-spacing: -0.04em;
+  line-height: 1.2;
   overflow-wrap: anywhere;
 }
 
-.result-count {
-  margin-block: var(--space-step) 0;
-  margin-inline: calc(1.5rem + var(--space-base)) 0;
-  color: var(--layout-color-2);
+.search-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-base) var(--row-padding);
+  margin-block-start: var(--space-base);
+  margin-inline-start: calc(1.5rem + var(--space-base));
+  color: var(--desk-muted);
   line-height: 1.4;
+
+  & p {
+    margin: 0;
+  }
+}
+
+.result-count {
   font-variant-numeric: tabular-nums;
+}
+
+#semantic-search-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-base);
+
+  &::before {
+    content: "";
+    flex: none;
+    inline-size: 0.9em;
+    block-size: 0.9em;
+    background: var(--icon-info) center / contain no-repeat;
+    -moz-context-properties: stroke, fill;
+    stroke: currentColor;
+    fill: transparent;
+  }
+
+  &[data-state="ranked"]::before {
+    background-image: var(--icon-check);
+  }
+
+  &[data-state="ranking"]::before {
+    border: 1.5px solid var(--desk-line);
+    border-block-start-color: var(--desk-accent);
+    border-radius: 50%;
+    background: none;
+    box-sizing: border-box;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  #semantic-search-status[data-state="ranking"]::before {
+    animation: search-ranking-rotate 1s linear infinite;
+  }
+}
+
+@keyframes search-ranking-rotate {
+  to { transform: rotate(1turn); }
 }
 
 .search-actions,
@@ -114,7 +165,8 @@
   &[aria-expanded="true"],
   &[data-l10n-id="search-filters-active"] {
     color: var(--search-accent);
-    border-color: currentColor;
+    background-color: var(--desk-accent-soft);
+    border-color: var(--desk-line);
   }
 }
 
@@ -138,14 +190,15 @@
   min-inline-size: 0;
   margin-block-start: var(--row-padding);
   padding: var(--row-padding);
-  background: var(--layout-background-1);
-  border: 1px solid var(--layout-border-0);
+  background: var(--desk-sidebar);
+  border: 1px solid var(--desk-line);
   border-radius: var(--button-border-radius);
 }
 
 .filter-heading {
   margin: 0;
-  font-size: 1.15em;
+  font-size: 1.2rem;
+  letter-spacing: -0.025em;
 }
 
 .date-controls {
@@ -222,13 +275,13 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
   column-gap: var(--row-padding);
-  padding: var(--row-padding);
-  border-block-end: 1px solid var(--layout-border-0);
+  padding: var(--row-padding) clamp(var(--row-padding), 2vw, 1.5rem);
+  border-block-end: 1px solid var(--desk-line);
   user-select: text;
 
   &:hover,
   &:focus-within {
-    background: var(--layout-background-1);
+    background: var(--desk-canvas);
   }
 }
 
@@ -252,8 +305,9 @@
   background: none;
   color: var(--layout-color-0);
   font: inherit;
-  font-size: 1.08em;
-  font-weight: 600;
+  font-size: 1.075rem;
+  font-weight: 650;
+  letter-spacing: -0.015em;
   line-height: 1.4;
   text-align: start;
   overflow-wrap: anywhere;

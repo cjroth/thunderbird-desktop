@@ -58,7 +58,10 @@ add_task(async function testOpenEvent() {
 
   const unifinderBox = document.getElementById("bottom-events-box");
   if (unifinderBox.hidden) {
-    window.toggleUnifinder();
+    const searchToggle = document.getElementById("calendarFindEvents");
+    EventUtils.synthesizeMouseAtCenter(searchToggle, {}, window);
+    Assert.equal(searchToggle.ariaExpanded, "true", "Search is expanded");
+    Assert.equal(document.activeElement.id, "unifinder-search-field", "The input receives focus");
 
     await TestUtils.waitForCondition(
       () => !unifinderBox.hidden,

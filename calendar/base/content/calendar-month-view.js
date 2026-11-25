@@ -81,8 +81,7 @@
       dayLabel.style.pointerEvents = "none";
       dayLabel.classList.add("calendar-month-day-box-date-label", "calendar-month-day-label");
 
-      monthDayLabels.appendChild(weekLabel);
-      monthDayLabels.appendChild(dayLabel);
+      monthDayLabels.append(dayLabel, weekLabel);
 
       this.itemList = new MozElements.CalendarItemList({
         scrollClass: "calendar-month-day-box-scroll",

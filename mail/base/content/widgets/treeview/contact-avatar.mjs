@@ -94,18 +94,17 @@ class ContactAvatar extends HTMLElement {
     // We temporarily check for `card.name` and `card.email` because our mail
     // list implementation doesn't properly use nsIABCard but a custom subset of
     // it. We will update this later.
-    this.#letters.textContent =
-      Array.from(
-        (
-          card?.displayName ||
-          card?.primaryEmail ||
-          card?.name ||
-          card?.email ||
-          recipient
-        )
-          ?.normalize()
-          .replaceAll(/[^\p{Letter}\p{Nd}]+/gu, "")
-      )[0]?.toUpperCase() || "";
+    const name =
+      card?.displayName || card?.name || card?.primaryEmail || card?.email || recipient || "";
+    const words =
+      card?.firstName && card?.lastName
+        ? [card.firstName, card.lastName]
+        : name.split("@", 1)[0].trim().split(/\s+/u);
+    const initials = words.length > 1 ? [words[0], words.at(-1)] : words;
+    this.#letters.textContent = initials
+      .map(word => word.normalize().match(/[\p{Letter}\p{Nd}]/u)?.[0] ?? "")
+      .join("")
+      .toLocaleUpperCase(document.documentElement.lang || undefined);
     this.#letters.hidden = false;
   }
 }

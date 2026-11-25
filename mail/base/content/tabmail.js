@@ -809,15 +809,6 @@ ChromeUtils.defineESModuleGetters(this, {
         }
         tab.tabNode = t;
 
-        if (
-          this.tabContainer.mCollapseToolbar.collapsed &&
-          (!this.tabContainer.mAutoHide || this.tabContainer.allTabs.length > 1)
-        ) {
-          this.tabContainer.mCollapseToolbar.collapsed = false;
-          this.tabContainer._updateCloseButtons();
-          document.documentElement.removeAttribute("tabbarhidden");
-        }
-
         const oldTab = (this._mostRecentTabInfo = this.currentTabInfo);
         // If we're not disregarding the opening, hold a reference to opener
         // so that if the new tab is closed without switching, we can switch
@@ -889,6 +880,8 @@ ChromeUtils.defineESModuleGetters(this, {
           }
           t.linkedPanel = tab.panel.id;
         }
+
+        this.tabContainer.updateToolbarVisibility();
 
         // Set the tabId after defining a <browser> and before notifications.
         const browser = this.getBrowserForTab(tab);
@@ -1106,13 +1099,7 @@ ChromeUtils.defineESModuleGetters(this, {
           this.currentTabInfo.panel || this.currentTabInfo.mode.tabType.panel;
       }
 
-      if (
-        this.tabContainer.allTabs.length == 1 &&
-        this.tabContainer.mAutoHide
-      ) {
-        this.tabContainer.mCollapseToolbar.collapsed = true;
-        document.documentElement.setAttribute("tabbarhidden", "true");
-      }
+      this.tabContainer.updateToolbarVisibility();
     }
 
     removeTabByNode(aTabNode) {
@@ -1409,13 +1396,7 @@ ChromeUtils.defineESModuleGetters(this, {
         this.tabContainer.selectedIndex = 0;
       }
 
-      if (
-        this.tabContainer.allTabs.length == 1 &&
-        this.tabContainer.mAutoHide
-      ) {
-        this.tabContainer.mCollapseToolbar.collapsed = true;
-        document.documentElement.setAttribute("tabbarhidden", "true");
-      }
+      this.tabContainer.updateToolbarVisibility();
     }
 
     clearRecentlyClosedTabs() {

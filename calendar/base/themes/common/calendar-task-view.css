@@ -33,6 +33,10 @@
   );
 }
 
+#calendarContent:has(#calSidebar:not([collapsed]) #sidePanelNewTask:not([hidden])) #calendar-add-task-button {
+  display: none;
+}
+
 #task-text-filter-field {
   flex: 1;
   --input-text-max-width: none;
@@ -54,17 +58,32 @@
 }
 
 #calendar-task-details-grid {
-  padding: 1px 2px 0.2em;
+  padding-block: var(--space-base, 6px);
+  padding-inline: clamp(12px, 2vw, 30px);
   inline-size: 100%;
 }
 
+#task-summary-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 14px clamp(12px, 2vw, 30px) 5px;
+}
+
 #calendar-task-details-title {
-  font-weight: bold;
+  margin: 0;
+  font-family: var(--desk-font);
+  letter-spacing: -0.035em;
+  font-size: clamp(1.3rem, 2vw, 1.9rem);
+  font-weight: 655;
+  line-height: 1.2;
 }
 
 #calendar-task-details-grid > tr > th {
   display: flex;
-  justify-content: end;
+  justify-content: start;
   font-weight: normal;
   white-space: nowrap;
 }
@@ -82,7 +101,7 @@
 #other-actions-box {
   display: flex;
   justify-content: end;
-  padding-block: 2px 0.3em;
+  padding: 0;
 }
 
 #task-addition-box {
@@ -126,7 +145,10 @@
   border-width: 0;
   border-block-start: 1px solid var(--sidebar-border);
   margin-block: 0;
-  padding-inline: 4px;
+  padding-block: var(--space-base, 6px);
+  padding-inline: clamp(12px, 2vw, 30px);
+  font: inherit;
+  line-height: 1.5;
   outline: none;
   resize: none;
 }
@@ -155,6 +177,61 @@
 .task-details-value {
   text-align: start;
   color: WindowText;
+}
+
+@media (prefers-contrast: no-preference) {
+  #calendar-task-tree > treechildren::-moz-tree-row {
+    height: calc(24px + 2 * var(--space-base, 6px));
+    background: var(--desk-surface);
+    border: 0;
+    border-block-end: 1px solid var(--desk-line);
+  }
+
+  #calendar-task-tree > treechildren::-moz-tree-row(selected) {
+    background: var(--desk-accent-soft);
+  }
+
+  #calendar-task-tree > treechildren::-moz-tree-cell-text(selected, focus) {
+    color: var(--desk-ink);
+  }
+
+  #calSidebar #task-tree-filtergroup {
+    padding: 0 8px;
+  }
+
+  #task-tree-filtergroup > radio {
+    margin: 1px 0;
+    padding: 3px 8px;
+    border-radius: 5px;
+  }
+
+  #task-tree-filtergroup > radio[selected] {
+    background-color: var(--desk-accent-soft);
+    color: var(--desk-accent);
+    font-weight: 650;
+  }
+
+  #task-tree-filtergroup .radio-check {
+    display: none;
+  }
+
+  #task-addition-box {
+    background-color: var(--desk-canvas);
+    border-color: var(--desk-line);
+    padding: 8px clamp(12px, 2vw, 30px);
+  }
+
+  #calendar-task-details,
+  #calendar-task-details-description {
+    color: var(--desk-ink);
+    background-color: var(--desk-surface);
+  }
+
+  .task-details-name,
+  #calendar-task-details-grid > .item-date-row > .headline {
+    color: var(--desk-muted);
+    opacity: 1;
+  }
 }
 
 :root[lwt-tree] .task-details-name,

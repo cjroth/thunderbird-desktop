@@ -17,18 +17,24 @@ async function sub_test_toolbar_alignment(drawInTitlebar, hideMenu) {
   }
   await new Promise(resolve => requestAnimationFrame(resolve));
 
-  const size = document
-    .getElementById("spacesToolbar")
-    .getBoundingClientRect().width;
-
+  const header = document.getElementById("unifiedToolbarContainer");
+  const navigation = document.getElementById("spacesToolbar");
+  Assert.equal(
+    navigation.parentElement,
+    header,
+    "Spaces shares the window header"
+  );
+  Assert.equal(navigation.getAttribute("aria-orientation"), "horizontal");
   Assert.equal(
     document.getElementById("titlebar").getBoundingClientRect().left,
-    size,
-    "The correct style was applied to the #titlebar"
+    document.getElementById("messengerBody").getBoundingClientRect().left,
+    "The tab strip lines up with the full workspace"
   );
-  Assert.equal(
-    document.getElementById("toolbar-menubar").getBoundingClientRect().left,
-    size,
-    "The correct style was applied to the #toolbar-menubar"
+  const navigationRect = navigation.getBoundingClientRect();
+  const headerRect = header.getBoundingClientRect();
+  Assert.ok(
+    navigationRect.top >= headerRect.top &&
+      navigationRect.bottom <= headerRect.bottom,
+    "The window header contains the navigation"
   );
 }

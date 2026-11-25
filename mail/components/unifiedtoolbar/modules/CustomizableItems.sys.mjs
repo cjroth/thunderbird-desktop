@@ -17,7 +17,7 @@ XPCOMUtils.defineLazyPreferenceGetter(
   () => Services.obs.notifyObservers(null, "unified-toolbar-state-change")
 );
 
-const DEFAULT_ITEMS = ["spacer", "search-bar", "spacer"];
+const DEFAULT_ITEMS = ["spacer", "search-bar"];
 const DEFAULT_ITEMS_WITHOUT_SEARCH = ["spacer"];
 
 /**
@@ -120,9 +120,8 @@ export function getAvailableItemIdsForSpace(
  * @returns {string[]} Array of item IDs to show by default in the space.
  */
 export function getDefaultItemIdsForSpace(space) {
-  return (
-    lazy.glodaEnabled ? DEFAULT_ITEMS : DEFAULT_ITEMS_WITHOUT_SEARCH
-  ).concat(getExtensionsForSpace(space, true));
+  const items = lazy.glodaEnabled ? DEFAULT_ITEMS : DEFAULT_ITEMS_WITHOUT_SEARCH;
+  return [...items, ...getExtensionsForSpace(space, true)];
 }
 
 /**

@@ -829,3 +829,7 @@
     background-color: ButtonFace;
   }
 }
+
+global-search-bar .kbd-container kbd:first-of-type {
+  margin-inline-start: auto;
+}

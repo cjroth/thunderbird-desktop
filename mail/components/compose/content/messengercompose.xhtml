@@ -2053,7 +2053,7 @@
 #ifdef XP_MACOSX
            iconsize="small"
 #endif
-           defaultset="button-send,separator,button-encryption,button-encryption-options,button-address,spellingButton,button-save,button-contacts,spring,button-attach"
+           defaultset="button-attach,button-save,spring,button-encryption,button-encryption-options,separator,button-send"
            customizable="true"
            context="toolbar-context-menu">
   </toolbar>
@@ -2404,6 +2404,7 @@
             <html:input id="msgSubject"
                         type="text"
                         class="input-inline textbox-input"
+                        data-l10n-id="compose-subject-field"
                         disableonsend="true"
                         oninput="msgSubjectOnInput(event);"
                         onkeypress="subjectKeyPress(event);"
@@ -2516,6 +2517,21 @@
                    ondragleave="envelopeDragObserver.onDragLeave(event);"
                    onblur="attachmentBucketOnBlur();"/>
     </html:details>
+
+    <html:div class="writing-tools">
+      <html:button id="composeFormattingButton"
+                   class="button button-flat icon-button"
+                   type="button"
+                   aria-controls="FormatToolbar"
+                   onclick="goDoCommand('cmd_showFormatToolbar');"
+                   data-l10n-id="compose-formatting-button"></html:button>
+      <html:button id="composeFocusButton"
+                   class="button button-flat icon-button"
+                   type="button"
+                   aria-pressed="false"
+                   onclick="setComposeFocus(this.getAttribute('aria-pressed') != 'true'); focusMsgBody();"
+                   data-l10n-id="compose-focus-button"></html:button>
+    </html:div>
   </html:div>
 
   <panel id="customizeToolbarSheetPopup" noautohide="noautohide">

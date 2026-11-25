@@ -316,6 +316,121 @@
     customElements.define("agenda-list", Agenda, { extends: "ul" });
   });
 
+  /**
+   * A one-day list for the main calendar sidebar. The same filtered view as
+   * Today's agenda supplies occurrences and tracks changes to visible calendars.
+   */
+  class CalendarDayAgenda extends CalendarFilteredViewMixin(HTMLOListElement) {
+    #rows = new Map();
+
+    /**
+     * Track events that overlap this date in the calendar timezone.
+     *
+     * @param {calIDateTime} date - The day selected in the calendar view.
+     * @returns {Promise} Resolves when visible calendars have supplied their events.
+     */
+    async showDay(date) {
+      const start = cal.createDateTime();
+      start.resetTo(date.year, date.month, date.day, 0, 0, 0, cal.dtz.defaultTimezone);
+      const end = start.clone();
+      end.day++;
+
+      document.getElementById("selectedDayAgendaHeading").textContent =
+        cal.dtz.formatter.formatDateLongWithoutYear(start);
+      this.itemType = Ci.calICalendar.ITEM_FILTER_TYPE_EVENT;
+      this.setDateRange(start, end);
+      this.ariaBusy = "true";
+      await (this.isActive ? this.refreshItems() : this.activate());
+      if (this.startDate.compare(start) == 0) {
+        this.ariaBusy = "false";
+      }
+    }
+
+    clearItems() {
+      this.#rows.clear();
+      this.replaceChildren();
+    }
+
+    addItems(items) {
+      for (const item of items) {
+        if (this.#rows.has(item.hashId)) {
+          continue;
+        }
+
+        const template = document.getElementById("selectedDayAgendaRow");
+        const row = template.content.firstElementChild.cloneNode(true);
+        const button = row.querySelector("button");
+        const title = row.querySelector(".calendar-agenda-title");
+        row.item = item;
+        row.localStart = item.startDate.getInTimezone(this.startDate.timezone);
+
+        const calendarId = cal.view.formatStringForCSSRule(item.calendar.id);
+        button.style.setProperty("--agenda-color", `var(--calendar-${calendarId}-backcolor)`);
+        button.title = [item.title, cal.dtz.formatter.formatItemInterval(item), item.calendar.name]
+          .filter(Boolean)
+          .join("\n");
+        button.addEventListener("click", () => openEventDialogForViewing(item));
+        if (item.title) {
+          title.textContent = item.title;
+        } else {
+          document.l10n.setAttributes(title, "event-untitled");
+        }
+        this.#setTimeLabel(
+          row.querySelector(".calendar-agenda-time"),
+          row.localStart,
+          item.endDate.getInTimezone(this.startDate.timezone)
+        );
+        this.#rows.set(item.hashId, row);
+        cal.data.binaryInsertNode(
+          this,
+          row,
+          row,
+          (a, b) =>
+            Number(b.localStart.isDate) - Number(a.localStart.isDate) ||
+            a.localStart.compare(b.localStart) ||
+            (a.item.title || "").localeCompare(b.item.title || ""),
+          false,
+          node => node
+        );
+      }
+    }
+
+    #setTimeLabel(label, start, end) {
+      const beginsBeforeDay = start.compare(this.startDate) < 0;
+      const spansDayEnd = end.compare(this.endDate) >= 0;
+      if (start.isDate || (start.compare(this.startDate) <= 0 && spansDayEnd)) {
+        document.l10n.setAttributes(label, "calendar-view-all-day-label");
+      } else if (beginsBeforeDay) {
+        document.l10n.setAttributes(label, "calendar-selected-day-until", {
+          time: cal.dtz.formatter.formatTime(end),
+        });
+      } else if (spansDayEnd) {
+        document.l10n.setAttributes(label, "calendar-selected-day-from", {
+          time: cal.dtz.formatter.formatTime(start),
+        });
+      } else {
+        label.textContent = cal.dtz.formatter.formatTimeInterval(start, end);
+      }
+    }
+
+    removeItems(items) {
+      for (const item of items) {
+        this.#rows.get(item.hashId)?.remove();
+        this.#rows.delete(item.hashId);
+      }
+    }
+
+    removeItemsFromCalendar(calendarId) {
+      for (const [id, row] of this.#rows) {
+        if (row.item.calendar.id == calendarId) {
+          row.remove();
+          this.#rows.delete(id);
+        }
+      }
+    }
+  }
+  customElements.define("calendar-day-agenda", CalendarDayAgenda, { extends: "ol" });
+
   class AgendaListItem extends HTMLLIElement {
     /**
      * If this element represents an event that starts before the displayed day(s).

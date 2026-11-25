@@ -49,7 +49,7 @@
           class="spaces-toolbar"
           data-l10n-id="spaces-toolbar-element"
           data-l10n-attrs="toolbarname"
-          aria-orientation="vertical"
+          aria-orientation="horizontal"
           hidden="hidden">
   <!-- Hidden element used to fetch the style of an "active" button. -->
   <span id="spacesAccentPlaceholder" hidden="hidden"></span>
@@ -61,24 +61,28 @@
             class="spaces-toolbar-button"
             tabindex="0">
       <img src="" alt="" />
+      <span class="space-label" data-l10n-id="toolbar-mail-label"></span>
     </button>
     <button id="addressBookButton"
             data-l10n-id="spaces-toolbar-button-address-book2"
             class="spaces-toolbar-button"
             tabindex="-1">
       <img src="" alt="" />
+      <span class="space-label" data-l10n-id="spaces-navigation-contacts"></span>
     </button>
     <button id="calendarButton"
             data-l10n-id="spaces-toolbar-button-calendar2"
             class="spaces-toolbar-button"
             tabindex="-1">
       <img src="" alt="" />
+      <span class="space-label" data-l10n-id="toolbar-calendar-label"></span>
     </button>
     <button id="tasksButton"
             data-l10n-id="spaces-toolbar-button-tasks2"
             class="spaces-toolbar-button"
             tabindex="-1">
       <img src="" alt="" />
+      <span class="space-label" data-l10n-id="toolbar-tasks-label"></span>
     </button>
     <button id="chatButton"
             data-l10n-id="spaces-toolbar-button-chat2"
@@ -86,6 +90,7 @@
             tabindex="-1">
       <span class="spaces-badge-container"></span>
       <img src="" alt="" />
+      <span class="space-label" data-l10n-id="toolbar-chat-label"></span>
     </button>
   </div>
 
@@ -110,6 +115,7 @@
             class="spaces-toolbar-button"
             tabindex="-1">
       <img src="" alt="" />
+      <span class="space-label" data-l10n-id="customize-space-tab-settings"></span>
     </button>
 
     <!-- Collapse button. -->

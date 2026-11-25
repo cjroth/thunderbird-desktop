@@ -627,6 +627,141 @@ tr[data-properties~="outgoing"].selected .correspondentcol-column {
   flex-shrink: 0;
 }
 
+#threadPane .list-header-bar {
+  --list-heading-gutter: clamp(12px, 4cqi, 22px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  box-sizing: border-box;
+  padding: 20px var(--list-heading-gutter) 0;
+  gap: 13px 8px;
+
+  &[hidden] {
+    display: none;
+  }
+
+  & .list-header-bar-container-start {
+    min-inline-size: 0;
+    gap: 9px;
+    padding: 0;
+  }
+
+  & .list-header-bar-container-end {
+    gap: 2px;
+    padding: 2px;
+  }
+
+  & .list-header-title {
+    min-inline-size: 0;
+    font: 650 1.9rem/1.2 var(--desk-font, system-ui);
+    letter-spacing: -0.045em;
+  }
+
+  & .thread-pane-count-info {
+    padding: 0;
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  & #threadPaneFolderCountContainer {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  & #threadPaneQuickFilterButton {
+    inline-size: 30px;
+    min-inline-size: 30px;
+    block-size: 30px;
+    background-position: center;
+    padding: 0;
+
+    & span {
+      clip-path: inset(50%);
+      position: absolute;
+      inline-size: 1px;
+      block-size: 1px;
+      overflow: hidden;
+    }
+  }
+}
+
+.mail-scopes {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: clamp(10px, 4cqi, 22px);
+  align-items: end;
+  min-inline-size: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+
+  & button {
+    appearance: none;
+    display: block;
+    min-inline-size: 0;
+    flex: 0 0 auto;
+    padding: 3px 1px 10px;
+    margin: 0;
+    border: 0;
+    border-block-end: 2px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    color: var(--desk-muted);
+    font: 550 0.92rem/1.4 var(--desk-font, system-ui);
+
+    &[aria-pressed="true"] {
+      border-block-end-color: var(--desk-accent);
+      color: var(--desk-accent);
+    }
+
+    &:hover {
+      color: var(--desk-ink);
+    }
+
+    &:focus-visible {
+      outline: var(--focus-outline);
+      outline-offset: -2px;
+    }
+  }
+}
+
+#threadPaneHeaderBar:has(#threadPaneFolderName[hidden]) .mail-scopes {
+  display: none;
+}
+
+:root[uidensity="compact"] #threadPane .list-header-bar {
+  gap: 7px;
+  padding-block-start: 9px;
+}
+
+@container threadPane (width < 330px) {
+  #threadPane .list-header-bar .list-header-bar-container-start {
+    display: grid;
+    gap: 2px;
+  }
+}
+
+@media (prefers-contrast: no-preference) and (forced-colors: none) {
+  :root:not([lwt-tree]) #threadPane {
+    --tree-view-bg: var(--desk-surface);
+    --tree-view-color: var(--desk-ink);
+    --new-subject-color: var(--desk-ink);
+    --listbox-hover: var(--desk-accent-soft);
+    --listbox-focused-selected-bg: var(--desk-accent);
+    --listbox-selected-color: var(--desk-on-accent);
+
+    & .list-header-bar {
+      background-color: var(--desk-surface);
+      border-color: var(--desk-line);
+      color: var(--desk-ink);
+    }
+
+    & .thread-pane-count-info {
+      color: var(--desk-muted);
+    }
+  }
+}
+
 /* Account indicator */
 
 .is-unified tr:not([data-properties~="dummy"]) .accountcol-column::before {

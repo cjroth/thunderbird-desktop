@@ -73,7 +73,12 @@ add_setup(async function () {
   );
 
   cal.manager.getCalendars()[0].setProperty("disabled", false);
-  Assert.ok(BrowserTestUtils.isVisible(document.getElementById("today-pane-panel")));
+  const todayPane = document.getElementById("today-pane-panel");
+  if (!todayPane.isVisible()) {
+    todayPane.setVisible(true);
+    registerCleanupFunction(() => todayPane.setVisible(false));
+  }
+  Assert.ok(BrowserTestUtils.isVisible(todayPane));
 });
 
 add_task(function testReportIfCloseToMidnight() {

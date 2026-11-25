@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* globals TodayPane, switchToView, gLastShownCalendarView */
+/* globals TodayPane, switchToView, gLastShownCalendarView, currentView */
 /* import-globals-from calendar-unifinder.js */
 
 /* exported calSwitchToCalendarMode, calSwitchToMode, calSwitchToTaskMode,
@@ -31,6 +31,9 @@ var gCurrentMode = "mail";
  * @param {string} [mode="mail"] - the new mode: 'mail', 'calendar', 'task', etc.
  */
 function changeMode(mode = "mail") {
+  if (gCurrentMode == "calendar" && mode != "calendar") {
+    document.getElementById("selectedDayAgenda").deactivate();
+  }
   gCurrentMode = mode;
 
   document
@@ -90,6 +93,7 @@ function calSwitchToCalendarMode() {
 
     // show the last displayed type of calendar view
     switchToView(gLastShownCalendarView.get());
+    document.getElementById("selectedDayAgenda").showDay(currentView().selectedDay || cal.dtz.now());
     document.getElementById("calMinimonth").setAttribute("freebusy", "true");
 
     document.commandDispatcher.updateCommands("calendar_commands");
