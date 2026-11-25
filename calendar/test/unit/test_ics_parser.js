@@ -65,6 +65,29 @@ function test_failures() {
     },
   });
 
+  // The worker accepts this component, but converting its DTSTART to a calendar
+  // date fails on the main thread. The caller must still receive a failure.
+  const invalidStart = [
+    "BEGIN:VCALENDAR",
+    "BEGIN:VEVENT",
+    "UID:invalid-start",
+    "DTSTART:20261124T08",
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].join("\r\n");
+  const root = cal.icsService.parseICS(invalidStart);
+  parser = Cc["@mozilla.org/calendar/ics-parser;1"].createInstance(Ci.calIIcsParser);
+  do_test_pending();
+  parser.wrappedJSObject.processIcalComponent(root, {
+    onParsingComplete(rc) {
+      Assert.ok(
+        !Components.isSuccessCode(rc),
+        "Deferred conversion errors should reach the listener"
+      );
+      do_test_finished();
+    },
+  });
+
   // No real error here, but there is a message...
   parser = Cc["@mozilla.org/calendar/ics-parser;1"].createInstance(Ci.calIIcsParser);
   const str = ["BEGIN:VWORLD", "BEGIN:VEVENT", "UID:123", "END:VEVENT", "END:VWORLD"].join("\r\n");

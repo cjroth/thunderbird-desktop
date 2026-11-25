@@ -10,6 +10,9 @@
 
 var { CalEvent } = ChromeUtils.importESModule("resource:///modules/CalEvent.sys.mjs");
 var { TestUtils } = ChromeUtils.importESModule("resource://testing-common/TestUtils.sys.mjs");
+ChromeUtils.defineESModuleGetters(this, {
+  ICSServer: "resource://testing-common/calendar/ICSServer.sys.mjs",
+});
 
 do_get_profile();
 
@@ -135,10 +138,18 @@ add_task(async function test_invalidFileIsReadOnly() {
     !Services.prefs.prefHasUserValue(`calendar.registry.${calendar.id}.readOnly`),
     "read-only state should not be persisted"
   );
+  calendar.wrappedJSObject._cachedAdoptItemCallback = () => {
+    Assert.ok(false, "a rejected add must not report success to the cache");
+  };
   await Assert.rejects(
     calendar.addItem(createEvent()),
     e => e.result == Ci.calIErrors.CAL_IS_READONLY,
     "adding an item should be refused"
+  );
+  Assert.equal(
+    calendar.wrappedJSObject._cachedAdoptItemCallback,
+    null,
+    "the callback should be consumed"
   );
   Assert.equal(await IOUtils.readUTF8(path), contents, "file should be unchanged");
 });
@@ -158,6 +169,60 @@ add_task(async function test_fileBecomesInvalid() {
     "adding an item should be refused"
   );
   Assert.equal(await IOUtils.readUTF8(path), contents, "file should be unchanged");
+});
+
+add_task(async function test_queuedEditsRejectedAfterInvalidRefresh() {
+  const { calendar, path } = await loadCalendarFromFile(VALID_ICS);
+  const existing = await calendar.getItem("valid-file-event");
+  const modified = existing.clone();
+  modified.title = "Changed title";
+  const added = createEvent();
+  const contents = "Not an iCalendar file\n";
+  await rewriteFile(path, contents);
+
+  let batchDepth = 0;
+  const batchObserver = {
+    ...observer,
+    onStartBatch() {
+      batchDepth++;
+    },
+    onEndBatch() {
+      batchDepth--;
+    },
+  };
+  calendar.addObserver(batchObserver);
+  try {
+    // No await between refresh and the edits: they enter the queue before the
+    // file channel delivers the data which makes the calendar read-only.
+    calendar.refresh();
+    Assert.ok(calendar.wrappedJSObject._isLocked, "refresh should hold the calendar lock");
+    Assert.ok(!calendar.readOnly, "edits should initially be accepted into the queue");
+    const isReadOnly = e => e.result == Ci.calIErrors.CAL_IS_READONLY;
+    const editChecks = [
+      Assert.rejects(calendar.addItem(added), isReadOnly, "queued add should be rejected"),
+      Assert.rejects(
+        calendar.modifyItem(modified, existing),
+        isReadOnly,
+        "queued modify should be rejected"
+      ),
+      Assert.rejects(calendar.deleteItem(existing), isReadOnly, "queued delete should be rejected"),
+    ];
+    const queuedRead = calendar.getItem(added.id);
+    await Promise.all(editChecks);
+    Assert.equal(
+      await queuedRead,
+      null,
+      "the following read should finish without finding the item"
+    );
+    Assert.equal(batchDepth, 0, "all batches should have ended after the edits were rejected");
+    Assert.equal(
+      await IOUtils.readUTF8(path),
+      contents,
+      "queued edits should leave the file intact"
+    );
+  } finally {
+    calendar.removeObserver(batchObserver);
+  }
 });
 
 add_task(async function test_invalidFileRecovers() {
@@ -188,6 +253,89 @@ add_task(async function test_invalidFileRecovers() {
     (await IOUtils.readUTF8(path)).includes("valid-file-event"),
     "existing event should be kept when writing"
   );
+});
+
+add_task(async function test_failedMemoryEditReleasesQueue() {
+  const { calendar, path } = await loadCalendarFromFile(VALID_ICS);
+  const rejected = Assert.rejects(
+    calendar.modifyItem(createEvent(), null),
+    e => e.result == Cr.NS_ERROR_FAILURE,
+    "modifying an unknown item should reject"
+  );
+  const nextRead = calendar.getItem("valid-file-event");
+  await rejected;
+  Assert.equal((await nextRead).title, "Existing event", "later reads should still complete");
+  Assert.equal(
+    await IOUtils.readUTF8(path),
+    VALID_ICS,
+    "a rejected edit should not change the file"
+  );
+});
+
+add_task(async function test_writeConflictRejectsEdit() {
+  const { calendar, path } = await loadCalendarFromFile(VALID_ICS);
+  const updated = VALID_ICS.replace("Existing event", "Updated outside Thunderbird");
+  await rewriteFile(path, updated);
+
+  let callbackCalls = 0;
+  calendar.wrappedJSObject._cachedAdoptItemCallback = () => callbackCalls++;
+  const added = createEvent();
+  const rejected = Assert.rejects(
+    calendar.addItem(added),
+    e => e.result == Ci.calIErrors.MODIFICATION_FAILED,
+    "a conflict with the changed file should reject the edit"
+  );
+  const queuedExisting = calendar.getItem("valid-file-event");
+  const queuedAdded = calendar.getItem(added.id);
+  await rejected;
+  Assert.equal(callbackCalls, 0, "a failed write should not report success to the cache");
+  Assert.equal(
+    (await queuedExisting).title,
+    "Updated outside Thunderbird",
+    "queued reads should see the external change"
+  );
+  Assert.equal(await queuedAdded, null, "queued reads should not see the failed edit");
+  Assert.equal(await IOUtils.readUTF8(path), updated, "the external change should be preserved");
+});
+
+add_task(async function test_failedWriteRetainsItemsWhenServerIsUnavailable() {
+  ICSServer.open();
+  registerCleanupFunction(() => ICSServer.close());
+  await ICSServer.putICSInternal(VALID_ICS);
+  const calendar = cal.manager.createCalendar("ics", Services.io.newURI(ICSServer.url));
+  calendar.name = "unavailable ICS server";
+  calendar.id = cal.getUUID();
+  await loadAndWait(calendar.id, () => cal.manager.registerCalendar(calendar));
+  registerCleanupFunction(() => cal.manager.unregisterCalendar(calendar));
+  const existing = await calendar.getItem("valid-file-event");
+  const changed = existing.clone();
+  changed.title = "Uncommitted change";
+  const added = createEvent();
+  await ICSServer.close();
+
+  // The failed backup and the recovery refresh both hit the unavailable server.
+  // A same-ID add can replace an existing item in the memory provider.
+  for (const [name, edit] of [
+    ["add", () => calendar.addItem(added)],
+    ["same-ID add", () => calendar.addItem(changed)],
+    ["modify", () => calendar.modifyItem(changed, existing)],
+    ["delete", () => calendar.deleteItem(existing)],
+  ]) {
+    const rejected = Assert.rejects(
+      edit(),
+      e => e.result == Ci.calIErrors.MODIFICATION_FAILED,
+      `${name} should fail while the server is down`
+    );
+    const queuedExisting = calendar.getItem(existing.id);
+    const queuedAdded = calendar.getItem(added.id);
+    await rejected;
+    Assert.equal(
+      (await queuedExisting)?.title,
+      existing.title,
+      `${name} should retain the committed event`
+    );
+    Assert.equal(await queuedAdded, null, `${name} should leave no uncommitted event`);
+  }
 });
 
 add_task(async function test_persistedReadOnlyIsKept() {
