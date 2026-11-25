@@ -24,181 +24,117 @@ add_setup(async function () {
 });
 
 /**
- * Create a minimal gloda-like message object.
+ * Append a result row in the same document as its custom element definition.
  *
- * @param {object[]} aRecipients - The recipient identities.
- * @returns {object} The message.
+ * @param {object} overrides - Gloda message fields for this case.
+ * @returns {HTMLElement} The rendered result.
  */
-function createMessage(aRecipients) {
-  return {
+function renderMessage(overrides) {
+  const row = doc.createElement("facet-result-message");
+  row.message = {
     subject: "Test subject",
     from: { value: "author@example.com", contact: { name: "Author" } },
     date: new Date(),
-    recipients: aRecipients,
-    starred: false,
     read: true,
+    recipients: [],
+    ...overrides,
   };
+  doc.body.appendChild(row);
+  return row;
 }
 
-/**
- * Render a message with the given recipients and return the resulting nodes.
- *
- * @param {object[]} aRecipients - The recipient identities.
- * @returns {Element} The facet-result-message element.
- */
-function renderMessage(aRecipients) {
-  const element = doc.createElement("facet-result-message");
-  element.message = createMessage(aRecipients);
-  doc.body.appendChild(element);
-  return element;
-}
+add_task(function testScanMessage() {
+  const row = renderMessage({ subject: "Field notes", starred: true });
 
-/**
- * Get the rendered recipient names.
- *
- * @param {Element} aElement - The facet-result-message element.
- * @returns {string[]} The rendered recipient names.
- */
-function getRecipients(aElement) {
-  return [...aElement.querySelectorAll(".message-recipient")].map(
-    node => node.textContent
+  const subject = row.querySelector("button.message-subject");
+  Assert.equal(
+    subject.textContent,
+    "Field notes",
+    "The subject should name the open action"
   );
-}
-
-function recipient(name) {
-  return { contact: { name } };
-}
-
-add_task(function testSingleRecipient() {
-  const element = renderMessage([recipient("Alice")]);
-
-  Assert.deepEqual(
-    getRecipients(element),
-    ["Alice"],
-    "a single recipient should be shown"
+  Assert.equal(
+    row.querySelector(".message-author").textContent,
+    "Author",
+    "The sender should be visible"
   );
-  element.remove();
-});
-
-add_task(function testMultipleRecipients() {
-  const element = renderMessage([recipient("Alice"), recipient("Bob")]);
-
-  Assert.deepEqual(
-    getRecipients(element),
-    ["Alice", "Bob"],
-    "all recipients should be shown"
+  Assert.equal(
+    row.querySelector("time").dateTime,
+    row.message.date.toISOString(),
+    "The date should be available in machine-readable form"
   );
-  element.remove();
-});
-
-add_task(function testExactlyMaxRecipients() {
-  const element = renderMessage([
-    recipient("Alice"),
-    recipient("Bob"),
-    recipient("Carol"),
-  ]);
-
-  Assert.deepEqual(
-    getRecipients(element),
-    ["Alice", "Bob", "Carol"],
-    "all three recipients should be shown"
+  Assert.equal(
+    row.querySelector(".message-star").dataset.l10nId,
+    "search-message-starred",
+    "A star should expose a localized name"
   );
   Assert.ok(
-    !element.textContent.includes("other"),
-    "no 'others' label should be shown for exactly three recipients"
+    !row.querySelector("details").open,
+    "Sender details should initially be collapsed"
   );
-  element.remove();
+  Assert.ok(
+    row
+      .querySelector(".message-sender-details")
+      .textContent.includes("author@example.com"),
+    "The expanded details should contain the full sender address"
+  );
+  row.remove();
 });
 
-add_task(function testOneOtherRecipient() {
-  const element = renderMessage([
-    recipient("Alice"),
-    recipient("Bob"),
-    recipient("Carol"),
-    recipient("Dave"),
-  ]);
-
-  Assert.deepEqual(
-    getRecipients(element),
-    ["Alice", "Bob", "Carol", "1 other"],
-    "the singular 'other' form should be used for a single extra recipient"
+add_task(function testDetailsKeepEveryRecipientAndAttachment() {
+  const addresses = ["alice", "bob", "carol", "dave", "erin"].map(name => ({
+    contact: { name },
+    value: name + "@example.com",
+  }));
+  const attachment = "Receipt for the winter ridge inspection, revision 3.pdf";
+  const row = renderMessage({
+    recipients: addresses,
+    attachmentNames: [attachment],
+    tags: [{ tag: "Fieldwork" }],
+  });
+  const details = row.querySelector("details");
+  Assert.ok(!details.open, "Message details should initially be collapsed");
+  details.querySelector("summary").click();
+  Assert.ok(details.open, "The detail disclosure should expand");
+  const recipients = details.querySelector(".message-recipients").textContent;
+  for (const { contact, value } of addresses) {
+    Assert.ok(
+      recipients.includes(contact.name + " <" + value + ">"),
+      "Each recipient name and address should be available in details"
+    );
+  }
+  Assert.ok(
+    details
+      .querySelector(".message-attachments")
+      .textContent.includes(attachment),
+    "The complete filename should be available"
   );
-  element.remove();
+  Assert.ok(
+    details.querySelector(".message-tags").textContent.includes("Fieldwork"),
+    "The message tag should be available"
+  );
+  row.remove();
 });
 
-add_task(function testMoreThanMaxRecipients() {
-  const element = renderMessage([
-    recipient("Alice"),
-    recipient("Bob"),
-    recipient("Carol"),
-    recipient("Dave"),
-    recipient("Erin"),
-  ]);
-
-  Assert.deepEqual(
-    getRecipients(element),
-    ["Alice", "Bob", "Carol", "2 others"],
-    "the recipients should be limited and an 'others' label added"
+add_task(function testIncompleteRecipientIdentities() {
+  const row = renderMessage({
+    recipients: [
+      { contact: { name: "Chat room" } },
+      { value: "unlisted@example.com" },
+      { contact: {} },
+    ],
+  });
+  const recipients = row.querySelector(".message-recipients").textContent;
+  Assert.ok(
+    recipients.includes("Chat room"),
+    "A chat recipient can have a name only"
   );
-  element.remove();
-});
-
-add_task(function testSeparatorsAreClassified() {
-  const element = renderMessage([
-    recipient("Alice"),
-    recipient("Bob"),
-    recipient("Carol"),
-  ]);
-
-  Assert.deepEqual(
-    [...element.querySelectorAll(".message-recipient-separator")].map(
-      node => node.textContent
-    ),
-    [", ", ", and "],
-    "separator nodes should be rendered by Intl.ListFormat"
+  Assert.ok(
+    recipients.includes("unlisted@example.com"),
+    "An unknown contact should display its address"
   );
-  element.remove();
-});
-
-add_task(function testRecipientWithoutNameIsSkipped() {
-  const element = renderMessage([
-    { contact: { name: "" } },
-    { contact: {} },
-    recipient("Bob"),
-  ]);
-
-  Assert.deepEqual(
-    getRecipients(element),
-    ["Bob", "2 others"],
-    "recipients without a name should not be rendered, but still be counted"
+  Assert.ok(
+    !recipients.includes("undefined"),
+    "Missing identity fields should be omitted"
   );
-  element.remove();
-});
-
-add_task(function testOthersCountUsesAllRecipients() {
-  // The "N others" count must cover every recipient that is not shown, so
-  // that the names on screen plus the label always add up to the total
-  // number of recipients.
-  const element = renderMessage([
-    { contact: { name: "" } },
-    recipient("Bob"),
-    recipient("Carol"),
-    recipient("Dave"),
-  ]);
-
-  Assert.deepEqual(
-    getRecipients(element),
-    ["Bob", "Carol", "Dave", "1 other"],
-    "the three named recipients are shown and the nameless one is counted as other"
-  );
-  element.remove();
-});
-
-add_task(function testToLabel() {
-  const element = renderMessage([recipient("Alice")]);
-
-  const toLabel = element.querySelector(".message-to-label");
-  Assert.ok(toLabel, "the To: label should be present");
-  Assert.equal(toLabel.textContent, "to:", "the To: label should read 'to:'");
-  element.remove();
+  row.remove();
 });

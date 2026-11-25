@@ -6,12 +6,6 @@
 
 // Wrap in a block to prevent leaking to window scope.
 {
-  const { MailServices } = ChromeUtils.importESModule(
-    "resource:///modules/MailServices.sys.mjs"
-  );
-  const { TagUtils } = ChromeUtils.importESModule(
-    "resource:///modules/TagUtils.sys.mjs"
-  );
   const { FacetUtils } = ChromeUtils.importESModule(
     "resource:///modules/gloda/Facet.sys.mjs"
   );
@@ -24,11 +18,32 @@
   );
 
   const lazy = {};
+  ChromeUtils.defineESModuleGetters(lazy, {
+    makeFriendlyDateAgo: "resource:///modules/TemplateUtils.sys.mjs",
+  });
   ChromeUtils.defineLazyGetter(
     lazy,
-    "l10n",
-    () => new Localization(["messenger/glodaFacetView.ftl"], true)
+    "listFormatter",
+    () =>
+      new Intl.ListFormat(Services.locale.appLocaleAsBCP47, {
+        type: "conjunction",
+      })
   );
+
+  /**
+   * Format the Gloda identity shared by mail and chat search results.
+   * Chat identities may supply a display name without an email address.
+   *
+   * @param {GlodaIdentity} identity
+   * @returns {string} Display name and address, or the available field.
+   */
+  function formatIdentity(identity) {
+    const name = identity.contact?.name;
+    const address = identity.value;
+    return name && address && name != address
+      ? `${name} <${address}>`
+      : name || address || "";
+  }
 
   class MozFacetDate extends HTMLElement {
     get build() {
@@ -47,19 +62,35 @@
       const wrapper = document.createElement("div");
       wrapper.classList.add("facet", "date-wrapper");
 
-      const h2 = document.createElement("h2");
-
       const canvas = document.createElement("div");
       canvas.classList.add("date-vis-frame");
+      canvas.setAttribute("role", "img");
+      document.l10n.setAttributes(canvas, "search-timeline-graphic");
 
-      const zoomOut = document.createElement("div");
-      zoomOut.classList.add("facet-date-zoom-out");
-      zoomOut.setAttribute("role", "image");
-      zoomOut.addEventListener("click", () => FacetContext.zoomOut());
+      const table = document.createElement("table");
+      table.classList.add("timeline-counts");
+      document.l10n.setAttributes(
+        table.createCaption(),
+        "search-timeline-counts"
+      );
+      const header = table.createTHead().insertRow();
+      for (const id of ["search-timeline-period", "search-timeline-messages"]) {
+        const column = document.createElement("th");
+        column.scope = "col";
+        document.l10n.setAttributes(column, id);
+        header.appendChild(column);
+      }
+      this.periodRows = table.createTBody();
 
-      wrapper.appendChild(h2);
-      wrapper.appendChild(canvas);
-      wrapper.appendChild(zoomOut);
+      this.zoomOut = document.createElement("button");
+      this.zoomOut.classList.add(
+        "button",
+        "icon-button",
+        "facet-date-zoom-out"
+      );
+      document.l10n.setAttributes(this.zoomOut, "search-date-zoom-out");
+      this.zoomOut.addEventListener("click", () => FacetContext.zoomOut());
+      wrapper.append(canvas, table, this.zoomOut);
       this.appendChild(wrapper);
 
       this.canUpdate = true;
@@ -70,20 +101,40 @@
       }
     }
 
-    buildFunc(aDoSize) {
-      if (!this.vis) {
-        this.vis = new DateFacetVis(this, this.canvasNode);
-        this.vis.build();
-      } else {
-        while (this.canvasNode.hasChildNodes()) {
-          this.canvasNode.lastChild.remove();
-        }
-        if (aDoSize) {
-          this.vis.build();
-        } else {
-          this.vis.rebuild();
-        }
+    buildFunc() {
+      const width = this.canvasNode.clientWidth;
+      if (!this.faceter?.validItems.length || !width || this.hidden) {
+        return;
       }
+
+      this.vis ??= new DateFacetVis(this, this.canvasNode);
+      this.canvasNode.replaceChildren();
+      this.vis.build();
+      this.zoomOut.hidden = !this.faceter.constraint;
+    }
+    /**
+     * Expose the interval represented by each histogram bar and its count.
+     *
+     * @param {{startDate: Date, endDate: Date, items: GlodaMessage[]}[]} bins
+     *   Calendar intervals, each ending at the start of the next interval.
+     */
+    describeBins(bins) {
+      const locale = Services.locale.appLocaleAsBCP47;
+      const dates = new Intl.DateTimeFormat(locale, { dateStyle: "medium" });
+      const numbers = new Intl.NumberFormat(locale);
+      const rows = document.createDocumentFragment();
+      for (const bin of bins) {
+        const row = document.createElement("tr");
+        const period = document.createElement("th");
+        period.scope = "row";
+        const through = new Date(bin.endDate.getTime() - 1);
+        period.textContent = dates.formatRange(bin.startDate, through);
+        const count = document.createElement("td");
+        count.textContent = numbers.format(bin.items.length);
+        row.append(period, count);
+        rows.appendChild(row);
+      }
+      this.periodRows.replaceChildren(rows);
     }
   }
 
@@ -96,113 +147,29 @@
    */
   class MozFacetResultsMessage extends HTMLElement {
     connectedCallback() {
-      const header = document.createElement("div");
-      header.classList.add("results-message-header");
-
-      this.countNode = document.createElement("h2");
-      this.countNode.classList.add("results-message-count");
-
-      this.toggleTimeline = document.createElement("button");
-      this.toggleTimeline.setAttribute("id", "date-toggle");
-      this.toggleTimeline.setAttribute("tabindex", 0);
-      this.toggleTimeline.classList.add("gloda-timeline-button");
-      this.toggleTimeline.addEventListener("click", () => {
-        FacetContext.toggleTimeline();
-      });
-
-      const timelineImage = document.createElement("img");
-      timelineImage.setAttribute(
-        "src",
-        "chrome://messenger/skin/icons/popular.svg"
-      );
-      timelineImage.setAttribute("alt", "");
-      this.toggleTimeline.appendChild(timelineImage);
-
-      this.toggleText = document.createElement("span");
-      this.toggleTimeline.appendChild(this.toggleText);
-
-      const sortDiv = document.createElement("div");
-      sortDiv.classList.add("results-message-sort-bar");
-
-      this.sortSelect = document.createElement("select");
-      this.sortSelect.classList.add("select");
-      this.sortSelect.setAttribute("id", "sortby");
-      const sortByPref = Services.prefs.getIntPref("gloda.facetview.sortby");
-
-      const relevanceItem = document.createElement("option");
-      relevanceItem.textContent = glodaFacetStrings.GetStringFromName(
-        "glodaFacetView.results.message.sort.relevance2"
-      );
-      relevanceItem.setAttribute("value", "-dascore");
-      relevanceItem.toggleAttribute(
-        "selected",
-        sortByPref <= 0 || sortByPref == 2 || sortByPref > 3
-      );
-      this.sortSelect.appendChild(relevanceItem);
-
-      const dateItem = document.createElement("option");
-      dateItem.textContent = glodaFacetStrings.GetStringFromName(
-        "glodaFacetView.results.message.sort.date2"
-      );
-      dateItem.setAttribute("value", "-date");
-      dateItem.toggleAttribute("selected", sortByPref == 1 || sortByPref == 3);
-      this.sortSelect.appendChild(dateItem);
-
+      if (this.messagesNode) {
+        return;
+      }
       this.messagesNode = document.createElement("div");
       this.messagesNode.classList.add("messages");
-
-      header.appendChild(this.countNode);
-      header.appendChild(this.toggleTimeline);
-      header.appendChild(sortDiv);
-
-      sortDiv.appendChild(this.sortSelect);
-
-      this.appendChild(header);
+      this.messagesNode.setAttribute("role", "list");
       this.appendChild(this.messagesNode);
     }
 
-    setMessages(messages) {
-      const displayCount = messages.length;
-      const totalCount = FacetContext.activeSet.length;
-
-      // set the count so CSS selectors can know what the results look like
-      this.setAttribute("state", totalCount <= 0 ? "empty" : "some");
-
-      document.l10n.setAttributes(this.countNode, "item-count-m-of-n", {
-        m: displayCount,
-        n: totalCount,
-      });
-
-      this.toggleText.textContent = glodaFacetStrings.GetStringFromName(
-        "glodaFacetView.results.message.timeline.label"
-      );
-
-      const sortByPref = Services.prefs.getIntPref("gloda.facetview.sortby");
-      this.sortSelect.addEventListener("change", () => {
-        if (sortByPref >= 2) {
-          Services.prefs.setIntPref(
-            "gloda.facetview.sortby",
-            this.sortSelect.value == "-dascore" ? 2 : 3
-          );
-        }
-
-        FacetContext.sortBy = this.sortSelect.value;
-      });
-
-      while (this.messagesNode.hasChildNodes()) {
-        this.messagesNode.lastChild.remove();
+    setMessages(messages, appendFrom = 0) {
+      if (!appendFrom) {
+        this.messagesNode.replaceChildren();
       }
-      try {
-        // -- Messages
-        for (const message of messages) {
-          const msgNode = document.createElement("facet-result-message");
-          msgNode.message = message;
-          msgNode.setAttribute("class", "message");
-          this.messagesNode.appendChild(msgNode);
-        }
-      } catch (e) {
-        console.error(e);
+      const rows = document.createDocumentFragment();
+      for (let index = appendFrom; index < messages.length; index++) {
+        const row = document.createElement("facet-result-message");
+        row.id = "message-result-" + index;
+        row.message = messages[index];
+        row.classList.add("message");
+        row.setAttribute("role", "listitem");
+        rows.appendChild(row);
       }
+      this.messagesNode.appendChild(rows);
     }
   }
 
@@ -235,8 +202,8 @@
       this.addChildren();
 
       this.canUpdate = true;
-      this.bubble.addEventListener("click", event => {
-        return this.bubbleClicked(event);
+      this.checkbox.addEventListener("change", () => {
+        this.checked = this.checkbox.checked;
       });
 
       if ("faceter" in this) {
@@ -245,7 +212,7 @@
     }
 
     addChildren() {
-      this.bubble = document.createElement("span");
+      this.bubble = document.createElement("label");
       this.bubble.classList.add("facet-checkbox-bubble");
 
       this.checkbox = document.createElement("input");
@@ -279,6 +246,7 @@
       }
       this.checkbox.checked = val;
       this.toggleAttribute("checked", val);
+      this.checkStateChanged();
       if (val) {
         if (!this.disabled) {
           FacetContext.addFacetConstraint(this.faceter, true, this.trueGroups);
@@ -286,14 +254,9 @@
       } else {
         this.checkbox.removeAttribute("checked");
         if (!this.disabled) {
-          FacetContext.removeFacetConstraint(
-            this.faceter,
-            true,
-            this.trueGroups
-          );
+          FacetContext.clearFacet(this.faceter);
         }
       }
-      this.checkStateChanged();
     }
 
     get checked() {
@@ -332,6 +295,8 @@
           } else {
             this.checked = false;
           }
+        } else {
+          this.checked = false;
         }
         this.countNode.textContent = count.toLocaleString();
         return;
@@ -356,11 +321,10 @@
       this.countNode.textContent = this.trueValues.length.toLocaleString();
     }
 
-    bubbleClicked(event) {
-      if (!this.disabled) {
-        this.checked = !this.checked;
-      }
-      event.stopPropagation();
+    reset() {
+      this.removeAttribute("checked");
+      this.checkbox.checked = false;
+      this.checkStateChanged();
     }
   }
 
@@ -375,12 +339,13 @@
       super.addChildren();
 
       this.filterNode = document.createElement("select");
-      this.filterNode.classList.add("facet-filter-list");
+      this.filterNode.classList.add("select", "facet-filter-list");
+      document.l10n.setAttributes(this.filterNode, "search-attachment-type");
       this.appendChild(this.filterNode);
 
       this.canUpdate = true;
-      this.bubble.addEventListener("click", event => {
-        return super.bubbleClicked(event);
+      this.checkbox.addEventListener("change", () => {
+        this.checked = this.checkbox.checked;
       });
 
       this.extraSetup();
@@ -503,7 +468,6 @@
         this.filterNode.selectedIndex = 0;
         this.filterNode.value = "all";
         this.selectedValue = "all";
-        this.#triggerFacet(this.trueGroups);
       }
     }
 
@@ -548,17 +512,6 @@
         this.showPopup(event);
       });
 
-      this.addEventListener("keypress", event => {
-        if (event.keyCode != KeyEvent.DOM_VK_RETURN) {
-          return;
-        }
-        this.showPopup(event);
-      });
-
-      this.addEventListener("keypress", event => {
-        this.activateLink(event);
-      });
-
       this.addEventListener("mouseover", event => {
         // we dispatch based on the class of the thing we clicked on.
         // there are other ways we could accomplish this, but they all sorta suck.
@@ -566,7 +519,7 @@
           event.target.hasAttribute("class") &&
           event.target.classList.contains("bar-link")
         ) {
-          this.barHovered(event.target.parentNode, true);
+          this.barHovered(event.target.closest(".bar"));
         }
       });
 
@@ -577,16 +530,17 @@
           event.target.hasAttribute("class") &&
           event.target.classList.contains("bar-link")
         ) {
-          this.barHoverGone(event.target.parentNode, true);
+          this.barHoverGone(event.target.closest(".bar"));
         }
       });
     }
 
     connectedCallback() {
-      const facet = document.createElement("div");
+      const facet = document.createElement("details");
       facet.classList.add("facet");
 
-      this.nameNode = document.createElement("h2");
+      this.nameNode = document.createElement("summary");
+      this.nameNode.classList.add("facet-name");
 
       this.contentBox = document.createElement("div");
       this.contentBox.classList.add("facet-content");
@@ -776,10 +730,12 @@
       for (const groupPair of useGroups) {
         const [groupValue, groupItems] = groupPair;
         const li = document.createElement("li");
-        li.setAttribute("class", "bar");
-        li.setAttribute("tabindex", "0");
-        li.setAttribute("role", "link");
-        li.setAttribute("aria-haspopup", "true");
+        li.classList.add("bar");
+        const button = document.createElement("button");
+        button.classList.add("bar-button");
+        button.setAttribute("aria-expanded", "false");
+        button.setAttribute("aria-controls", "facet-actions");
+        li.appendChild(button);
         li.groupValue = groupValue;
         li.setAttribute("groupValue", groupValue);
         li.groupItems = groupItems;
@@ -787,7 +743,6 @@
         const countSpan = document.createElement("span");
         countSpan.setAttribute("class", "bar-count");
         countSpan.textContent = groupItems.length.toLocaleString();
-        li.appendChild(countSpan);
 
         const label = document.createElement("span");
         label.setAttribute("class", "bar-link");
@@ -817,7 +772,7 @@
           label.textContent = labelStr;
           label.setAttribute("title", labelStr);
         }
-        li.appendChild(label);
+        button.append(label, countSpan);
 
         // root it under the appropriate list
         if (constraint) {
@@ -873,168 +828,34 @@
 
     clearBrushedItems() {}
 
-    afterListVisible(variety, callback) {
-      const labelNode = this[variety + "Label"];
-      const listNode = this[variety + "List"];
-
-      // if there are already things displayed, no need
-      if (listNode.childElementCount) {
-        callback();
-        return;
-      }
-
-      const remListVisible =
-        this.remainderLabel.getAttribute("needed") == "true";
-      const remListShouldBeVisible = this.remainderList.childElementCount > 1;
-
-      labelNode.setAttribute("state", "some");
-
-      let showNodes = [labelNode];
-      if (remListVisible != remListShouldBeVisible) {
-        showNodes = [labelNode, this.remainderLabel];
-      }
-
-      showNodes.forEach(node => (node.style.display = "block"));
-
-      callback();
-    }
-
-    _flyBarAway(barNode, variety, callback) {
-      function getRect(aElement) {
-        const box = aElement.getBoundingClientRect();
-        const documentElement = aElement.ownerDocument.documentElement;
-        return {
-          top: box.top + window.pageYOffset - documentElement.clientTop,
-          left: box.left + window.pageXOffset - documentElement.clientLeft,
-          width: box.width,
-          height: box.height,
-        };
-      }
-      // figure out our origin location prior to adding the target or it
-      //  will shift us down.
-      const origin = getRect(barNode);
-
-      // clone the node into its target location
-      const targetNode = barNode.cloneNode(true);
-      targetNode.groupValue = barNode.groupValue;
-      targetNode.groupItems = barNode.groupItems;
-      targetNode.setAttribute("variety", variety);
-
-      const targetParent = this[variety + "List"];
-      targetParent.appendChild(targetNode);
-
-      // create a flying clone
-      const flyingNode = barNode.cloneNode(true);
-
-      const dest = getRect(targetNode);
-
-      // if the flying box wants to go higher than the content box goes, just
-      //  send it to the top of the content box instead.
-      const contentRect = getRect(this.contentBox);
-      if (dest.top < contentRect.top) {
-        dest.top = contentRect.top;
-      }
-
-      // likewise if it wants to go further south than the content box, stop
-      //  that
-      if (dest.top > contentRect.top + contentRect.height) {
-        dest.top = contentRect.top + contentRect.height - dest.height;
-      }
-
-      flyingNode.style.position = "absolute";
-      flyingNode.style.width = origin.width + "px";
-      flyingNode.style.height = origin.height + "px";
-      flyingNode.style.top = origin.top + "px";
-      flyingNode.style.left = origin.left + "px";
-      flyingNode.style.zIndex = 1000;
-
-      flyingNode.style.transitionDuration =
-        Math.abs(dest.top - origin.top) * 2 + "ms";
-      flyingNode.style.transitionProperty = "top, left";
-
-      flyingNode.addEventListener("transitionend", () => {
-        barNode.remove();
-        targetNode.style.display = "block";
-        flyingNode.remove();
-
-        if (callback) {
-          setTimeout(callback, 50);
-        }
-      });
-
-      document.body.appendChild(flyingNode);
-
-      // Adding setTimeout to improve the facet-discrete animation.
-      // See Bug 1439323 for more detail.
-      setTimeout(() => {
-        // animate the flying clone... flying!
-        window.requestAnimationFrame(() => {
-          flyingNode.style.top = dest.top + "px";
-          flyingNode.style.left = dest.left + "px";
-        });
-
-        // hide the target (cloned) node
-        targetNode.style.display = "none";
-
-        // hide the original node and remove its JS properties
-        barNode.style.visibility = "hidden";
-        delete barNode.groupValue;
-        delete barNode.groupItems;
-      }, 100);
-    }
-
     barClicked(barNode, variety) {
       const groupValue = barNode.groupValue;
-      // These determine what goAnimate actually does.
-      // flyAway allows us to cancel flying in the case the constraint is
-      //  being fully dropped and so the facet is just going to get rebuilt
-      let flyAway = true;
-
-      const goAnimate = () => {
-        setTimeout(() => {
-          if (flyAway) {
-            this.afterListVisible(variety, () => {
-              this._flyBarAway(barNode, variety, () => {
-                this.updateHeaderStates();
-              });
-            });
-          }
-        }, 0);
+      const updateRows = () => {
+        this.buildRows();
+        const row = Array.from(this.querySelectorAll(".bar")).find(
+          candidate => candidate.groupValue == groupValue
+        );
+        (
+          row?.firstElementChild || document.getElementById("filter-toggle")
+        ).focus();
       };
 
-      // Immediately apply the facet change, triggering the animation after
-      //  the faceting completes.
       if (variety == "remainder") {
-        const currentVariety = barNode.getAttribute("variety");
-        const constraintGone = FacetContext.removeFacetConstraint(
+        FacetContext.removeFacetConstraint(
           this.faceter,
-          currentVariety == "include",
+          barNode.getAttribute("variety") == "include",
           [groupValue],
-          goAnimate
+          updateRows
         );
-
-        // we will automatically rebuild if the constraint is gone, so
-        //  just make the animation a no-op.
-        if (constraintGone) {
-          flyAway = false;
-        }
       } else {
-        // include/exclude
-        const revalidate = FacetContext.addFacetConstraint(
+        FacetContext.addFacetConstraint(
           this.faceter,
           variety == "include",
           [groupValue],
           false,
           false,
-          goAnimate
+          updateRows
         );
-
-        // revalidate means we need to blow away the other dudes, in which
-        //  case it makes the most sense to just trigger a rebuild of ourself
-        if (revalidate) {
-          flyAway = false;
-          this.build(false);
-        }
       }
     }
 
@@ -1085,65 +906,18 @@
     }
 
     showPopup(event) {
-      try {
-        // event.target could be the <li> node, or a span inside
-        // of it, or perhaps the facet-more button, or maybe something
-        // else that we'll handle in the next version.  We walk up its
-        // parent chain until we get to the right level of the DOM
-        // hierarchy, or the facet-content which seems to be the root.
-        if (this.currentNode) {
-          this.currentNode.removeAttribute("selected");
-        }
-
-        let node = event.target;
-
-        while (
-          !(node && node.hasAttribute && node.hasAttribute("class")) ||
-          (!node.classList.contains("bar") &&
-            !node.classList.contains("facet-more") &&
-            !node.classList.contains("facet-content"))
-        ) {
-          node = node.parentNode;
-        }
-
-        if (!(node && node.hasAttribute && node.hasAttribute("class"))) {
-          return false;
-        }
-
-        this.currentNode = node;
-        node.toggleAttribute("selected", true);
-
-        if (node.classList.contains("bar")) {
-          document.querySelector("facet-popup-menu").show(event, this, node);
-        } else if (node.classList.contains("facet-more")) {
-          this.changeMode("all");
-        }
-
-        return false;
-      } catch (e) {
-        return console.error(e);
-      }
-    }
-
-    activateLink(event) {
-      try {
-        let node = event.target;
-
-        while (
-          !node.hasAttribute("class") ||
-          (!node.classList.contains("facet-more") &&
-            !node.classList.contains("facet-content"))
-        ) {
-          node = node.parentNode;
-        }
-
-        if (node.classList.contains("facet-more")) {
-          this.changeMode("all");
-        }
-
-        return false;
-      } catch (e) {
-        return console.error(e);
+      const barNode = event.target.closest(".bar");
+      if (barNode) {
+        document.querySelector("facet-popup-menu").show(this, barNode);
+      } else if (event.target.closest(".facet-more")) {
+        const firstNew = this.orderedGroups.find(
+          ([value]) => !this.topGroups.some(([top]) => top == value)
+        );
+        this.changeMode("all");
+        const firstRow = Array.from(this.querySelectorAll(".bar")).find(
+          row => row.groupValue == firstNew?.[0]
+        );
+        firstRow?.firstElementChild.focus();
       }
     }
   }
@@ -1151,93 +925,45 @@
   customElements.define("facet-discrete", MozFacetDiscrete);
 
   class MozFacetPopupMenu extends HTMLElement {
-    constructor() {
-      super();
-
-      this.addEventListener("keypress", event => {
-        switch (event.keyCode) {
-          case KeyEvent.DOM_VK_ESCAPE:
-            this.hide();
-            break;
-
-          case KeyEvent.DOM_VK_DOWN:
-            this.moveFocus(event, 1);
-            break;
-
-          case KeyEvent.DOM_VK_TAB:
-            if (event.shiftKey) {
-              this.moveFocus(event, -1);
-              break;
-            }
-
-            this.moveFocus(event, 1);
-            break;
-
-          case KeyEvent.DOM_VK_UP:
-            this.moveFocus(event, -1);
-            break;
-
-          default:
-            break;
-        }
-      });
-    }
-
     connectedCallback() {
-      const parentDiv = document.createElement("div");
-      parentDiv.classList.add("parent");
-      parentDiv.setAttribute("tabIndex", "0");
+      this.id = "facet-actions";
+      const parent = document.createElement("div");
+      parent.classList.add("parent");
 
-      this.includeNode = document.createElement("div");
+      this.includeNode = document.createElement("button");
       this.includeNode.classList.add("popup-menuitem", "top");
-      this.includeNode.setAttribute("tabindex", "0");
-      this.includeNode.onmouseover = () => {
-        this.focus();
-      };
-      this.includeNode.onkeypress = event => {
-        if (event.keyCode == event.DOM_VK_RETURN) {
-          this.doInclude();
-        }
-      };
-      this.includeNode.onmouseup = () => {
-        this.doInclude();
-      };
-
-      this.excludeNode = document.createElement("div");
+      this.excludeNode = document.createElement("button");
       this.excludeNode.classList.add("popup-menuitem", "bottom");
-      this.excludeNode.setAttribute("tabindex", "0");
-      this.excludeNode.onmouseover = () => {
-        this.focus();
-      };
-      this.excludeNode.onkeypress = event => {
-        if (event.keyCode == event.DOM_VK_RETURN) {
-          this.doExclude();
-        }
-      };
-      this.excludeNode.onmouseup = () => {
-        this.doExclude();
-      };
-
-      this.undoNode = document.createElement("div");
+      this.undoNode = document.createElement("button");
       this.undoNode.classList.add("popup-menuitem", "undo");
-      this.undoNode.setAttribute("tabindex", "0");
-      this.undoNode.onmouseover = () => {
-        this.focus();
-      };
-      this.undoNode.onkeypress = event => {
-        if (event.keyCode == event.DOM_VK_RETURN) {
-          this.doUndo();
+      this.includeNode.addEventListener("click", () =>
+        this.choose("includeFacet")
+      );
+      this.excludeNode.addEventListener("click", () =>
+        this.choose("excludeFacet")
+      );
+      this.undoNode.addEventListener("click", () => this.choose("undoFacet"));
+
+      parent.append(this.includeNode, this.excludeNode, this.undoNode);
+      this.appendChild(parent);
+      this.addEventListener("keydown", event => {
+        if (event.key == "Escape") {
+          this.hide(true);
+        } else if (event.key == "Tab") {
+          // Resume tabbing at the facet that opened the popup.
+          this.hide(true);
+          return;
+        } else if (event.key == "ArrowDown" || event.key == "ArrowUp") {
+          (document.activeElement == this.includeNode
+            ? this.excludeNode
+            : this.includeNode
+          ).focus();
+        } else {
+          return;
         }
-      };
-      this.undoNode.onmouseup = () => {
-        this.doUndo();
-      };
-
-      parentDiv.appendChild(this.includeNode);
-      parentDiv.appendChild(this.excludeNode);
-      parentDiv.appendChild(this.undoNode);
-
-      this.appendChild(parentDiv);
+        event.preventDefault();
+        event.stopPropagation();
+      });
     }
 
     _getLabel(facetDef, facetValue, groupValue, stringName) {
@@ -1303,119 +1029,54 @@
       }
     }
 
-    moveFocus(event) {
-      try {
-        // We probably want something quite generic in the long term, but that
-        // is way too much for now (needs to skip over invisible items, etc)
-        const focused = document.activeElement;
-        if (focused == this.includeNode) {
-          this.excludeNode.focus();
-        } else if (focused == this.excludeNode) {
-          this.includeNode.focus();
-        }
-        event.preventDefault();
-        event.stopPropagation();
-      } catch (e) {
-        console.error(e);
+    show(facetNode, barNode) {
+      if (this.node == barNode) {
+        this.hide(true);
+        return;
       }
-    }
-
-    selectItem() {
-      try {
-        const focused = document.activeElement;
-        if (focused == this.includeNode) {
-          this.doInclude();
-        } else if (focused == this.excludeNode) {
-          this.doExclude();
-        } else {
-          this.doUndo();
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
-    show(event, facetNode, barNode) {
-      try {
-        this.node = barNode;
-        this.facetNode = facetNode;
-        const facetDef = facetNode.facetDef;
-        const groupValue = barNode.groupValue;
-        const variety = barNode.getAttribute("variety");
-        const label = barNode.querySelector(".bar-link").textContent;
-        this.build(facetDef, label, groupValue);
-        this.node.toggleAttribute("selected", true);
-        const rtl = window.getComputedStyle(this).direction == "rtl";
-        /* We show different menus if we're on an "unselected" facet value,
-         or if we're on a preselected facet value, whether included or
-         excluded. The variety attribute handles that through CSS */
-        this.setAttribute("variety", variety);
-        const rect = barNode.getBoundingClientRect();
-        let x, y;
-        if (event.type == "click") {
-          // center the menu on the mouse click
-          if (rtl) {
-            x = event.pageX + 10;
-          } else {
-            x = event.pageX - 10;
-          }
-          y = Math.max(20, event.pageY - 15);
-        } else {
-          if (rtl) {
-            x = rect.left + rect.width / 2 + 20;
-          } else {
-            x = rect.left + rect.width / 2 - 20;
-          }
-          y = rect.top - 10;
-        }
-        if (rtl) {
-          this.style.left = x - this.getBoundingClientRect().width + "px";
-        } else {
-          this.style.left = x + "px";
-        }
-        this.style.top = y + "px";
-
-        if (variety == "remainder") {
-          // include
-          this.includeNode.focus();
-        } else {
-          // undo
-          this.undoNode.focus();
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
-    hide() {
-      try {
-        this.setAttribute("variety", "invisible");
-        if (this.node) {
-          this.node.removeAttribute("selected");
-          this.node.focus();
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
-    doInclude() {
-      try {
-        this.facetNode.includeFacet(this.node);
-        this.hide();
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
-    doExclude() {
-      this.facetNode.excludeFacet(this.node);
       this.hide();
+      this.node = barNode;
+      this.facetNode = facetNode;
+      const variety = barNode.getAttribute("variety");
+      const label = barNode.querySelector(".bar-link").textContent;
+      this.build(facetNode.facetDef, label, barNode.groupValue);
+      barNode.firstElementChild.setAttribute("aria-expanded", "true");
+      this.setAttribute("variety", variety);
+
+      const rect = barNode.getBoundingClientRect();
+      const rtl = window.getComputedStyle(this).direction == "rtl";
+      const left = rtl ? rect.right - this.offsetWidth : rect.left;
+      this.style.left =
+        Math.max(
+          0,
+          Math.min(
+            left,
+            document.documentElement.clientWidth - this.offsetWidth
+          )
+        ) + "px";
+      this.style.top =
+        (rect.bottom + this.offsetHeight <= window.innerHeight
+          ? rect.bottom
+          : Math.max(0, rect.top - this.offsetHeight)) + "px";
+      (variety == "remainder" ? this.includeNode : this.undoNode).focus();
     }
 
-    doUndo() {
-      this.facetNode.undoFacet(this.node);
+    hide(restoreFocus = false) {
+      if (!this.node) {
+        return;
+      }
+      this.setAttribute("variety", "invisible");
+      this.node.firstElementChild.setAttribute("aria-expanded", "false");
+      if (restoreFocus) {
+        this.node.firstElementChild.focus();
+      }
+      this.node = null;
+    }
+
+    choose(method) {
+      const node = this.node;
       this.hide();
+      this.facetNode[method](node);
     }
   }
 
@@ -1449,352 +1110,222 @@
     }
 
     connectedCallback() {
-      const messageHeader = document.createElement("div");
-
-      const messageLine = document.createElement("div");
-      messageLine.classList.add("message-line");
-
-      const messageMeta = document.createElement("div");
-      messageMeta.classList.add("message-meta");
-
-      this.addressesGroup = document.createElement("div");
-      this.addressesGroup.classList.add("message-addresses-group");
-
-      this.authorGroup = document.createElement("div");
-      this.authorGroup.classList.add("message-author-group");
-
-      this.author = document.createElement("span");
-      this.author.classList.add("message-author");
-
-      this.date = document.createElement("div");
-      this.date.classList.add("message-date");
-
-      this.authorGroup.appendChild(this.author);
-      this.authorGroup.appendChild(this.date);
-      this.addressesGroup.appendChild(this.authorGroup);
-      messageMeta.appendChild(this.addressesGroup);
-      messageLine.appendChild(messageMeta);
-
-      const messageSubjectGroup = document.createElement("div");
-      messageSubjectGroup.classList.add("message-subject-group");
-
-      this.star = document.createElement("span");
-      this.star.classList.add("message-star");
-
-      this.subject = document.createElement("span");
-      this.subject.classList.add("message-subject");
-      this.subject.setAttribute("tabindex", "0");
-      this.subject.setAttribute("role", "link");
-
-      this.tags = document.createElement("span");
-      this.tags.classList.add("message-tags");
-
-      this.recipientsGroup = document.createElement("div");
-      this.recipientsGroup.classList.add("message-recipients-group");
-
-      this.to = document.createElement("span");
-      this.to.classList.add("message-to-label");
-
-      this.recipients = document.createElement("div");
-      this.recipients.classList.add("message-recipients");
-
-      this.recipientsGroup.appendChild(this.to);
-      this.recipientsGroup.appendChild(this.recipients);
-      messageSubjectGroup.appendChild(this.star);
-      messageSubjectGroup.appendChild(this.subject);
-      messageSubjectGroup.appendChild(this.tags);
-      messageSubjectGroup.appendChild(this.recipientsGroup);
-      messageLine.appendChild(messageSubjectGroup);
-      messageHeader.appendChild(messageLine);
-      this.appendChild(messageHeader);
-
-      this.snippet = document.createElement("pre");
-      this.snippet.classList.add("message-body");
-
-      this.attachments = document.createElement("div");
-      this.attachments.classList.add("message-attachments");
-
-      this.appendChild(this.snippet);
-      this.appendChild(this.attachments);
-
-      this.build();
-    }
-
-    build() {
+      if (this.subject) {
+        return;
+      }
       const message = this.message;
-
-      const subject = this.subject;
-      // -- eventify
-      subject.onclick = event => {
-        FacetContext.showConversationInTab(this, event.button == 1);
-      };
-      subject.onkeypress = event => {
-        if (Event.keyCode == event.DOM_VK_RETURN) {
-          FacetContext.showConversationInTab(this, event.shiftKey);
-        }
-      };
-
-      // -- Content Poking
-      if (message.subject.trim() == "") {
-        subject.textContent = glodaFacetStrings.GetStringFromName(
+      const subjectText =
+        message.subject.trim() ||
+        glodaFacetStrings.GetStringFromName(
           "glodaFacetView.result.message.noSubject"
         );
-      } else {
-        subject.textContent = message.subject;
-      }
-      const authorNode = this.author;
-      authorNode.setAttribute("title", message.from.value);
-      authorNode.textContent = message.from.contact.name;
-      const toNode = this.to;
-      toNode.textContent = glodaFacetStrings.GetStringFromName(
-        "glodaFacetView.result.message.toLabel"
-      );
 
-      // this.author.textContent = ;
-      const { makeFriendlyDateAgo } = ChromeUtils.importESModule(
-        "resource:///modules/TemplateUtils.sys.mjs"
-      );
-      this.date.textContent = makeFriendlyDateAgo(message.date);
-
-      // - Recipients
-      try {
-        const recipientsNode = this.recipients;
-        if (message.recipients) {
-          const MAX_RECIPIENTS = 3;
-
-          const formatter = new Intl.ListFormat(
-            Services.locale.appLocaleAsBCP47,
-            {
-              style: "long",
-              type: "conjunction",
-            }
-          );
-          // Gloda identities expose the display name as contact.name.
-          // Recipients without one are not shown, but still count towards
-          // the "N others" total so that it matches the number of
-          // recipients that were left out.
-          const contactNames = message.recipients
-            .map(recipient => recipient.contact?.name)
-            .filter(Boolean)
-            .slice(0, MAX_RECIPIENTS);
-          const otherCount = message.recipients.length - contactNames.length;
-          if (otherCount > 0) {
-            contactNames.push(
-              lazy.l10n.formatValueSync("facet-view-and-others", {
-                count: otherCount,
-              })
-            );
-          }
-          const parts = formatter.formatToParts(contactNames);
-          for (const part of parts) {
-            const recipNode = document.createElement("span");
-            recipNode.setAttribute(
-              "class",
-              part.type == "element"
-                ? "message-recipient"
-                : "message-recipient-separator"
-            );
-            recipNode.textContent = part.value;
-            recipientsNode.appendChild(recipNode);
-          }
-        }
-      } catch (e) {
-        console.error(e);
-      }
-
-      // - Starred
-      const starNode = this.star;
+      const heading = document.createElement("div");
+      heading.classList.add("message-subject-group");
+      this.subject = document.createElement("button");
+      this.subject.classList.add("message-subject");
+      this.subject.dir = "auto";
+      this.subject.textContent = subjectText;
+      heading.appendChild(this.subject);
       if (message.starred) {
-        starNode.setAttribute("starred", "true");
+        const star = document.createElement("span");
+        star.classList.add("message-star");
+        star.setAttribute("role", "img");
+        document.l10n.setAttributes(star, "search-message-starred");
+        heading.appendChild(star);
       }
 
-      // - Attachments
-      if (message.attachmentNames) {
-        const attachmentsNode = this.attachments;
-        const imgNode = document.createElement("div");
-        imgNode.setAttribute("class", "message-attachment-icon");
-        attachmentsNode.appendChild(imgNode);
-        for (let attach of message.attachmentNames) {
-          const attachNode = document.createElement("div");
-          attachNode.setAttribute("class", "message-attachment");
-          if (attach.length >= 28) {
-            attach = attach.substring(0, 24) + "…";
-          }
-          attachNode.textContent = attach;
-          attachmentsNode.appendChild(attachNode);
-        }
+      const date = document.createElement("time");
+      date.classList.add("message-date");
+      date.id = this.id + "-date";
+      date.dateTime = message.date.toISOString();
+      date.title = message.date.toLocaleString();
+      date.textContent = lazy.makeFriendlyDateAgo(message.date);
+      const author = document.createElement("div");
+      author.classList.add("message-author");
+      author.dir = "auto";
+      author.id = this.id + "-sender";
+      const recipients =
+        message.recipients?.filter(
+          identity => identity.contact?.name || identity.value
+        ) ?? [];
+      if (message.fromMe?.length && recipients.length) {
+        const first = recipients[0];
+        const others = recipients.length - 1;
+        const label = others
+          ? "search-message-correspondents"
+          : "search-message-correspondent";
+        document.l10n.setAttributes(author, label, {
+          recipient: first.contact?.name || first.value,
+          others,
+        });
+        author.title = formatIdentity(first);
+      } else {
+        author.textContent = message.from.contact?.name || message.from.value;
+        author.title = formatIdentity(message.from);
       }
 
-      // - Tags
-      const tagsNode = this.tags;
-      if ("tags" in message && message.tags.length) {
-        for (const tag of message.tags) {
-          const tagNode = document.createElement("span");
-          tagNode.setAttribute("class", "message-tag");
-          const color = MailServices.tags.getColorForKey(tag.key);
-          if (color) {
-            const textColor = !TagUtils.isColorContrastEnough(color)
-              ? "white"
-              : "black";
-            tagNode.setAttribute(
-              "style",
-              "color: " + textColor + "; background-color: " + color + ";"
-            );
-          }
-          tagNode.textContent = tag.tag;
-          tagsNode.appendChild(tagNode);
-        }
-      }
-
-      // - Body
-      if (message.indexedBodyText) {
-        let bodyText = message.indexedBodyText;
-
-        const matches = [];
-        if ("stashedColumns" in FacetContext.collection) {
-          let collection;
-          if (
-            "IMCollection" in FacetContext &&
-            message instanceof Gloda.lookupNounDef("im-conversation").clazz
-          ) {
-            collection = FacetContext.IMCollection;
-          } else {
-            collection = FacetContext.collection;
-          }
-          const offsets = collection.stashedColumns[message.id][0];
-          const offsetNums = offsets.split(" ").map(x => parseInt(x));
-          for (let i = 0; i < offsetNums.length; i += 4) {
-            // i is the column index. The indexedBodyText is in the column 0.
-            // Ignore matches for other columns.
-            if (offsetNums[i] != 0) {
-              continue;
-            }
-
-            // i+1 is the term index, indicating which queried term was found.
-            // We can ignore for now...
-
-            // i+2 is the *byte* offset at which the term is in the string.
-            // i+3 is the term's length.
-            matches.push([offsetNums[i + 2], offsetNums[i + 3]]);
-          }
-
-          // Sort the matches by index, just to be sure.
-          // They are probably already sorted, but if they aren't it could
-          // mess things up at the next step.
-          matches.sort((a, b) => a[0] - b[0]);
-
-          // Convert the byte offsets and lengths into character indexes.
-          const charCodeToByteCount = c => {
-            // UTF-8 stores:
-            // - code points below U+0080 on 1 byte,
-            // - code points below U+0800 on 2 bytes,
-            // - code points U+D800 through U+DFFF are UTF-16 surrogate halves
-            // (they indicate that JS has split a 4 bytes UTF-8 character
-            // in two halves of 2 bytes each),
-            // - other code points on 3 bytes.
-            if (c < 0x80) {
-              return 1;
-            }
-            if (c < 0x800 || (c >= 0xd800 && c <= 0xdfff)) {
-              return 2;
-            }
-            return 3;
-          };
-          let byteOffset = 0;
-          let offset = 0;
-          for (const match of matches) {
-            while (byteOffset < match[0]) {
-              byteOffset += charCodeToByteCount(bodyText.charCodeAt(offset++));
-            }
-            match[0] = offset;
-            for (let i = offset; i < offset + match[1]; ++i) {
-              const size = charCodeToByteCount(bodyText.charCodeAt(i));
-              if (size > 1) {
-                match[1] -= size - 1;
-              }
-            }
-          }
-        }
-
-        // how many lines of context we want before the first match:
-        const kContextLines = 2;
-
-        let startIndex = 0;
-        if (matches.length > 0) {
-          // Find where the snippet should begin to show at least the
-          // first match and kContextLines of context before the match.
-          startIndex = matches[0][0];
-          for (let context = kContextLines; context >= 0; --context) {
-            startIndex = bodyText.lastIndexOf("\n", startIndex - 1);
-            if (startIndex == -1) {
-              startIndex = 0;
-              break;
-            }
-          }
-        }
-
-        // start assuming it's just one line that we want to show
-        let idxNewline = -1;
-        let ellipses = "…";
-
-        let maxLineCount = 5;
-        if (startIndex != 0) {
-          // Avoid displaying an ellipses followed by an empty line.
-          while (bodyText[startIndex + 1] == "\n") {
-            ++startIndex;
-          }
-          bodyText = ellipses + bodyText.substring(startIndex);
-          // The first line will only contain the ellipsis as the character
-          // at startIndex is always \n, so we show an additional line.
-          ++maxLineCount;
-        }
-
-        for (
-          let newlineCount = 0;
-          newlineCount < maxLineCount;
-          newlineCount++
-        ) {
-          idxNewline = bodyText.indexOf("\n", idxNewline + 1);
-          if (idxNewline == -1) {
-            ellipses = "";
-            break;
-          }
-        }
-        let snippet = "";
-        if (idxNewline > -1) {
-          snippet = bodyText.substring(0, idxNewline);
-        } else {
-          snippet = bodyText;
-        }
-        if (ellipses) {
-          snippet = snippet.trimRight() + ellipses;
-        }
-
-        const parent = this.snippet;
-        let node = document.createTextNode(snippet);
-        parent.appendChild(node);
-
-        let offset = startIndex ? startIndex - 1 : 0; // The ellipsis takes 1 character.
-        for (const match of matches) {
-          if (idxNewline > -1 && match[0] > startIndex + idxNewline) {
-            break;
-          }
-          const secondNode = node.splitText(match[0] - offset);
-          node = secondNode.splitText(match[1]);
-          offset += match[0] + match[1] - offset;
-          const span = document.createElement("span");
-          span.textContent = secondNode.data;
-          if (!this.firstMatchText) {
-            this.firstMatchText = secondNode.data;
-          }
-          span.setAttribute("class", "message-body-fulltext-match");
-          parent.replaceChild(span, secondNode);
-        }
-      }
-
-      // - Misc attributes
+      this.snippet = document.createElement("p");
+      this.snippet.classList.add("message-body");
+      this.snippet.dir = "auto";
+      const describedBy = [author.id, date.id];
       if (!message.read) {
-        this.setAttribute("unread", "true");
+        const unread = document.createElement("span");
+        unread.hidden = true;
+        unread.id = this.id + "-unread";
+        document.l10n.setAttributes(unread, "search-message-unread");
+        heading.appendChild(unread);
+        describedBy.push(unread.id);
+      }
+      this.subject.setAttribute("aria-describedby", describedBy.join(" "));
+      this.append(heading, date, author, this.snippet);
+      this.toggleAttribute("unread", !message.read);
+      this.buildSnippet();
+      this.buildDetails(subjectText, recipients);
+
+      this.addEventListener("click", event => {
+        if (event.target.closest("details")) {
+          return;
+        }
+        if (event.target == this.subject || window.getSelection().isCollapsed) {
+          FacetContext.showConversationInTab(
+            this,
+            event.ctrlKey || event.metaKey || event.shiftKey
+          );
+        }
+      });
+      this.addEventListener("auxclick", event => {
+        if (event.button == 1 && !event.target.closest("details")) {
+          event.preventDefault();
+          FacetContext.showConversationInTab(this, true);
+        }
+      });
+    }
+
+    buildDetails(subjectText, recipients) {
+      const message = this.message;
+      const content = document.createElement("div");
+      content.classList.add("message-details-content");
+      const fields = [
+        [
+          "message-sender-details",
+          "search-message-from",
+          [formatIdentity(message.from)].filter(Boolean),
+        ],
+        [
+          "message-recipients",
+          "search-message-to",
+          recipients.map(formatIdentity),
+        ],
+        [
+          "message-attachments",
+          "search-message-attachments",
+          message.attachmentNames,
+        ],
+        [
+          "message-tags",
+          "search-message-tags",
+          message.tags?.map(tag => tag.tag),
+        ],
+      ];
+      for (const [className, labelId, values] of fields) {
+        if (!values?.length) {
+          continue;
+        }
+        const group = document.createElement("div");
+        group.classList.add(className);
+        const label = document.createElement("strong");
+        document.l10n.setAttributes(label, labelId);
+        group.append(label, " ", lazy.listFormatter.format(values));
+        content.appendChild(group);
+      }
+
+      if (content.childElementCount) {
+        const details = document.createElement("details");
+        details.classList.add("message-details");
+        const hasAttachments = Boolean(message.attachmentNames?.length);
+        if (hasAttachments) {
+          details.dataset.hasAttachments = "";
+        }
+        const summary = document.createElement("summary");
+        summary.classList.add("message-details-toggle");
+        const label = hasAttachments
+          ? "search-message-attachment-details"
+          : "search-message-details";
+        document.l10n.setAttributes(summary, label, {
+          subject: subjectText,
+        });
+        details.append(summary, content);
+        this.appendChild(details);
+      }
+    }
+
+    buildSnippet() {
+      const body = this.message.indexedBodyText;
+      if (!body) {
+        return;
+      }
+      const isChat =
+        "IMCollection" in FacetContext &&
+        this.message instanceof Gloda.lookupNounDef("im-conversation").clazz;
+      const collection = isChat
+        ? FacetContext.IMCollection
+        : FacetContext.collection;
+      const offsets = collection.stashedColumns?.[this.message.id]?.[0];
+      const values = offsets ? offsets.split(" ").map(Number) : [];
+      const matches = [];
+      for (let index = 0; index + 3 < values.length; index += 4) {
+        if (values[index] == 0 && values[index + 3] > 0) {
+          matches.push([values[index + 2], values[index + 3]]);
+        }
+      }
+      if (!matches.length) {
+        this.snippet.textContent =
+          body.slice(0, 240).trim() + (body.length > 240 ? "…" : "");
+        return;
+      }
+
+      // SQLite offsets count UTF-8 bytes. Keep the first body match in view
+      // even if it occurs halfway through a long, unbroken line.
+      matches.sort((a, b) => a[0] - b[0]);
+      const bytes = new TextEncoder().encode(body);
+      let start = Math.max(0, matches[0][0] - 40);
+      while ((bytes[start] & 0xc0) == 0x80) {
+        start++;
+      }
+      let end = Math.min(
+        bytes.length,
+        Math.max(start + 260, matches[0][0] + matches[0][1])
+      );
+      while ((bytes[end] & 0xc0) == 0x80) {
+        end++;
+      }
+
+      const decoder = new TextDecoder();
+      if (start) {
+        this.snippet.append("…");
+      }
+      let cursor = start;
+      for (const [offset, length] of matches) {
+        if (offset >= end) {
+          break;
+        }
+        if (offset < cursor) {
+          continue;
+        }
+        this.snippet.append(decoder.decode(bytes.subarray(cursor, offset)));
+        const mark = document.createElement("mark");
+        mark.classList.add("message-body-fulltext-match");
+        mark.textContent = decoder.decode(
+          bytes.subarray(offset, Math.min(offset + length, end))
+        );
+        this.snippet.appendChild(mark);
+        this.firstMatchText ??= mark.textContent;
+        cursor = offset + length;
+      }
+      this.snippet.append(decoder.decode(bytes.subarray(cursor, end)));
+      if (end < bytes.length) {
+        this.snippet.append("…");
       }
     }
   }
