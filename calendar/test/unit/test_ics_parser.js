@@ -10,6 +10,7 @@ function run_test() {
 function really_run_test() {
   test_roundtrip();
   test_async();
+  test_asyncComponentsYieldInOrder();
   test_failures();
   test_fake_parent();
   test_props_comps();
@@ -145,6 +146,39 @@ function test_async() {
 
       do_test_finished();
     },
+  });
+}
+
+function test_asyncComponentsYieldInOrder() {
+  const ids = Array.from({ length: 256 }, (_, index) => "event-" + index);
+  const data = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    ...ids.flatMap(id => ["BEGIN:VEVENT", "UID:" + id, "DTSTART:20261124T080000Z", "END:VEVENT"]),
+    "END:VCALENDAR",
+  ].join("\r\n");
+  const parser = Cc["@mozilla.org/calendar/ics-parser;1"].createInstance(Ci.calIIcsParser);
+  // Start with a parsed root so the probe measures main-thread component conversion.
+  const root = cal.icsService.parseICS(data);
+  let otherTaskRan = false;
+  do_test_pending();
+  parser.wrappedJSObject.processIcalComponent(root, {
+    onParsingComplete(rc) {
+      try {
+        Assert.equal(rc, Cr.NS_OK, "The calendar should parse successfully");
+        Assert.ok(otherTaskRan, "Queued work should run before async conversion completes");
+        Assert.deepEqual(
+          parser.getItems().map(item => item.id),
+          ids,
+          "Every event should be returned in source order"
+        );
+      } finally {
+        do_test_finished();
+      }
+    },
+  });
+  Services.tm.dispatchToMainThread(() => {
+    otherTaskRan = true;
   });
 }
 

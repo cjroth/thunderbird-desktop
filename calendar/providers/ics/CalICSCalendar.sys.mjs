@@ -5,6 +5,9 @@
 import { cal } from "resource:///modules/calendar/calUtils.sys.mjs";
 import { CalReadableStreamFactory } from "resource:///modules/CalReadableStreamFactory.sys.mjs";
 
+const MAX_ADOPTIONS_PER_TASK = 64;
+const MAX_ADOPTION_TIME_MS = 4;
+
 const lazy = {};
 ChromeUtils.defineLazyGetter(lazy, "log", () => {
   return console.createInstance({
@@ -479,8 +482,21 @@ export class CalICSCalendar extends cal.provider.BaseClass {
       async onParsingComplete(rc, parser_) {
         if (Components.isSuccessCode(rc)) {
           try {
+            let batchStart = Date.now();
+            let batchCount = 0;
             for (const item of parser_.getItems()) {
+              // adoptItem can resolve immediately. Yield to queued UI callbacks
+              // between batches while keeping the calendar locked until onLoad.
+              if (
+                batchCount &&
+                (batchCount >= MAX_ADOPTIONS_PER_TASK || Date.now() - batchStart >= MAX_ADOPTION_TIME_MS)
+              ) {
+                await new Promise(resolve => Services.tm.dispatchToMainThread(resolve));
+                batchStart = Date.now();
+                batchCount = 0;
+              }
               await self.#memoryCalendar.adoptItem(item);
+              batchCount++;
             }
             self.#unmappedComponents = parser_.getComponents();
             self.#unmappedProperties = parser_.getProperties();
