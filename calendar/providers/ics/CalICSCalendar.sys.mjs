@@ -5,6 +5,9 @@
 import { cal } from "resource:///modules/calendar/calUtils.sys.mjs";
 import { CalReadableStreamFactory } from "resource:///modules/CalReadableStreamFactory.sys.mjs";
 
+const MAX_ADOPTIONS_PER_TASK = 64;
+const MAX_ADOPTION_TIME_MS = 4;
+
 const lazy = {};
 ChromeUtils.defineLazyGetter(lazy, "log", () => {
   return console.createInstance({
@@ -58,7 +61,7 @@ export class CalICSCalendar extends cal.provider.BaseClass {
 
   #hooks = null;
   #memoryCalendar = null;
-  #modificationActions = [];
+  #pendingModification = null;
   #observer = null;
   #uri = null;
   #locked = false;
@@ -182,32 +185,15 @@ export class CalICSCalendar extends cal.provider.BaseClass {
   _cachedAdoptItemCallback = null;
 
   async adoptItem(aItem) {
-    if (this.readOnly) {
-      throw new Components.Exception("Calendar is not writable", Ci.calIErrors.CAL_IS_READONLY);
-    }
-
     // Take and clear the callback so it cannot carry over to the next operation.
     const adoptCallback = this._cachedAdoptItemCallback;
     this._cachedAdoptItemCallback = null;
-
-    const item = await new Promise(resolve => {
-      this.startBatch();
-      this._queue.push({
-        action: "add",
-        item: aItem,
-        listener: resolve,
-      });
-      this.#processQueue();
-    });
-
-    try {
-      if (adoptCallback) {
-        await adoptCallback(item.calendar, Cr.NS_OK, Ci.calIOperationListener.ADD, item.id, item);
-      }
-    } finally {
-      this.endBatch();
-    }
-    return item;
+    return this.#modifyInBatch(
+      aItem.id,
+      () => this.#memoryCalendar.addItem(aItem),
+      Ci.calIOperationListener.ADD,
+      adoptCallback
+    );
   }
 
   // Used to allow the cachedCalendar provider to hook into modifyItem() before
@@ -215,57 +201,54 @@ export class CalICSCalendar extends cal.provider.BaseClass {
   _cachedModifyItemCallback = null;
 
   async modifyItem(newItem, oldItem) {
-    if (this.readOnly) {
-      throw new Components.Exception("Calendar is not writable", Ci.calIErrors.CAL_IS_READONLY);
-    }
-
     // Take and clear the callback so it cannot carry over to the next operation.
     const modifyCallback = this._cachedModifyItemCallback;
     this._cachedModifyItemCallback = null;
-    const item = await new Promise(resolve => {
-      this.startBatch();
-      this._queue.push({
-        action: "modify",
-        newItem,
-        oldItem,
-        listener: resolve,
-      });
-      this.#processQueue();
-    });
+    return this.#modifyInBatch(
+      newItem?.id,
+      () => this.#memoryCalendar.modifyItem(newItem, oldItem),
+      Ci.calIOperationListener.MODIFY,
+      modifyCallback
+    );
+  }
 
+  async #modifyInBatch(id, apply, operationType, cachedCallback) {
+    this.#ensureWritable();
+    this.startBatch();
     try {
-      if (modifyCallback) {
-        await modifyCallback(
-          item.calendar,
-          Cr.NS_OK,
-          Ci.calIOperationListener.MODIFY,
-          item.id,
-          item
-        );
+      const item = await this.#enqueueModification(id, apply);
+      if (cachedCallback) {
+        await cachedCallback(item.calendar, Cr.NS_OK, operationType, item.id, item);
       }
+      return item;
     } finally {
       this.endBatch();
     }
-    return item;
   }
 
   /**
    * Delete the provided item.
    *
    * @param {calIItemBase} aItem
-   * @returns {Promise<void>}
+   * @returns {Promise<calIItemBase>} The deleted item.
    */
   deleteItem(aItem) {
+    this.#ensureWritable();
+    return this.#enqueueModification(aItem.id, async () => {
+      await this.#memoryCalendar.deleteItem(aItem);
+      return aItem;
+    });
+  }
+
+  #ensureWritable() {
     if (this.readOnly) {
       throw new Components.Exception("Calendar is not writable", Ci.calIErrors.CAL_IS_READONLY);
     }
+  }
 
-    return new Promise(resolve => {
-      this._queue.push({
-        action: "delete",
-        item: aItem,
-        listener: resolve,
-      });
+  #enqueueModification(id, apply) {
+    return new Promise((resolve, reject) => {
+      this._queue.push({ action: "write", id, apply, resolve, reject });
       this.#processQueue();
     });
   }
@@ -327,11 +310,6 @@ export class CalICSCalendar extends cal.provider.BaseClass {
 
   endBatch() {
     this.#observer.onEndBatch(this);
-  }
-
-  #forceRefresh() {
-    this._queue.push({ action: "refresh", forceRefresh: true });
-    this.#processQueue();
   }
 
   #prepareChannel(channel, forceRefresh) {
@@ -409,7 +387,11 @@ export class CalICSCalendar extends cal.provider.BaseClass {
     if (Components.isSuccessCode(status)) {
       if (currentStatus != Cr.NS_OK) {
         this.setProperty("currentStatus", Cr.NS_OK);
-        lazy.ConnectionNotifications.connectionRestored(this.id);
+        try {
+          lazy.ConnectionNotifications.connectionRestored(this.id);
+        } catch (error) {
+          lazy.log.warn("Unable to clear the calendar connection notification", error);
+        }
       }
       // Allow the hook to get needed data (like an etag) of the channel
       cont = this.#hooks.onAfterGet(loader.request);
@@ -420,7 +402,11 @@ export class CalICSCalendar extends cal.provider.BaseClass {
       lazy.log.warn(`[calICSCalendar] Unable to load stream - status: 0x${status.toString(16)}`);
 
       if (currentStatus == Cr.NS_OK) {
-        lazy.ConnectionNotifications.connectionFailed(this.id, status, this.name, this.#uri.host);
+        try {
+          lazy.ConnectionNotifications.connectionFailed(this.id, status, this.name, this.#uri.host);
+        } catch (error) {
+          lazy.log.warn("Unable to show the calendar connection notification", error);
+        }
       }
       this.notifyError(Ci.calIErrors.READ_FAILED, ""); // Sets currentStatus.
 
@@ -469,9 +455,6 @@ export class CalICSCalendar extends cal.provider.BaseClass {
     this.#observer.onStartBatch(this);
     this.#memoryCalendar.addObserver(this.#observer);
 
-    // Wrap parsing in a try block. Will ignore errors. That's a good thing
-    // for non-existing or empty files, but not good for invalid files.
-    // That's why we put them in readOnly mode
     const parser = Cc["@mozilla.org/calendar/ics-parser;1"].createInstance(Ci.calIIcsParser);
     const self = this;
     const listener = {
@@ -479,8 +462,22 @@ export class CalICSCalendar extends cal.provider.BaseClass {
       async onParsingComplete(rc, parser_) {
         if (Components.isSuccessCode(rc)) {
           try {
+            let batchStart = Date.now();
+            let batchCount = 0;
             for (const item of parser_.getItems()) {
+              // adoptItem can resolve immediately. Yield to queued UI callbacks
+              // between batches while keeping the calendar locked until onLoad.
+              if (
+                batchCount &&
+                (batchCount >= MAX_ADOPTIONS_PER_TASK ||
+                  Date.now() - batchStart >= MAX_ADOPTION_TIME_MS)
+              ) {
+                await new Promise(resolve => Services.tm.dispatchToMainThread(resolve));
+                batchStart = Date.now();
+                batchCount = 0;
+              }
               await self.#memoryCalendar.adoptItem(item);
+              batchCount++;
             }
             self.#unmappedComponents = parser_.getComponents();
             self.#unmappedProperties = parser_.getProperties();
@@ -499,10 +496,7 @@ export class CalICSCalendar extends cal.provider.BaseClass {
         self.#observer.onEndBatch(self);
         self.#observer.onLoad(self);
 
-        // Now that all items have been stuffed into the memory calendar
-        // we should add ourselves as observer. It is important that this
-        // happens *after* the calls to adoptItem in the above loop to prevent
-        // the views from being notified.
+        // Resume queued operations after observers receive onLoad.
         self.#unlock();
       },
     };
@@ -511,11 +505,10 @@ export class CalICSCalendar extends cal.provider.BaseClass {
 
   async #writeICS() {
     lazy.log.debug("[calICSCalendar] Commencing write of ICS Calendar " + this.name);
-    if (!this.#uri) {
-      throw Components.Exception("mUri must be set", Cr.NS_ERROR_FAILURE);
-    }
-    this.#lock();
     try {
+      if (!this.#uri) {
+        throw Components.Exception("mUri must be set", Cr.NS_ERROR_FAILURE);
+      }
       await this.#makeBackup();
       await this.#doWriteICS();
     } catch (e) {
@@ -562,10 +555,8 @@ export class CalICSCalendar extends cal.provider.BaseClass {
           `Failed to write to calendar file ${channel.URI.spec}: ${e.message}`
         );
 
-        // Writing the file has failed; refresh and signal error to all
-        // modifying operations.
+        Services.startup.exitLastWindowClosingSurvivalArea();
         this.#unlock(Ci.calIErrors.MODIFICATION_FAILED);
-        this.#forceRefresh();
 
         return;
       }
@@ -654,7 +645,7 @@ export class CalICSCalendar extends cal.provider.BaseClass {
         Services.startup.enterLastWindowClosingSurvivalArea();
         inLastWindowClosingSurvivalArea = true;
 
-        this.#writeSerializerToChannel(serializer, channel);
+        await this.#writeSerializerToChannel(serializer, channel);
       } else {
         this.#observer.onError(
           this.superCalendar,
@@ -676,8 +667,6 @@ export class CalICSCalendar extends cal.provider.BaseClass {
       );
       this.#observer.onError(this.superCalendar, Ci.calIErrors.MODIFICATION_FAILED, "");
       this.#unlock(Ci.calIErrors.MODIFICATION_FAILED);
-
-      this.#forceRefresh();
     }
   }
 
@@ -723,8 +712,6 @@ export class CalICSCalendar extends cal.provider.BaseClass {
       );
       this.#observer.onError(this.superCalendar, Ci.calIErrors.MODIFICATION_FAILED, "");
 
-      // The PUT has failed; refresh and signal error to all modifying operations
-      this.#forceRefresh();
       this.#unlock(Ci.calIErrors.MODIFICATION_FAILED);
 
       Services.startup.exitLastWindowClosingSurvivalArea();
@@ -741,36 +728,25 @@ export class CalICSCalendar extends cal.provider.BaseClass {
   }
 
   async #processQueue() {
-    if (this._isLocked) {
-      return;
-    }
-
     let task;
-    let refreshAction = null;
-    while ((task = this._queue.shift())) {
+    while (!this._isLocked && (task = this._queue.shift())) {
       switch (task.action) {
-        case "add":
+        case "write":
           this.#lock();
-          this.#memoryCalendar.addItem(task.item).then(async item => {
-            task.item = item;
-            this.#modificationActions.push(task);
-            await this.#writeICS();
-          });
-          return;
-        case "modify":
-          this.#lock();
-          this.#memoryCalendar.modifyItem(task.newItem, task.oldItem).then(async item => {
-            task.item = item;
-            this.#modificationActions.push(task);
-            await this.#writeICS();
-          });
-          return;
-        case "delete":
-          this.#lock();
-          this.#memoryCalendar.deleteItem(task.item).then(async () => {
-            this.#modificationActions.push(task);
-            await this.#writeICS();
-          });
+          try {
+            // Keep the immutable parent, including its recurrence exceptions,
+            // in case saving fails and the source cannot be reloaded.
+            task.previous = await (task.id == null ? null : this.#memoryCalendar.getItem(task.id));
+            // A refresh ahead of this edit may have made the calendar read-only.
+            this.#ensureWritable();
+            task.item = await task.apply();
+          } catch (error) {
+            task.reject(error);
+            this.#unlock();
+            return;
+          }
+          this.#pendingModification = task;
+          await this.#writeICS();
           return;
         case "get_item":
           this.#memoryCalendar.getItem(task.id).then(task.listener);
@@ -779,21 +755,11 @@ export class CalICSCalendar extends cal.provider.BaseClass {
           task.exec();
           break;
         case "refresh":
-          refreshAction = task;
-          break;
-      }
-
-      if (refreshAction) {
-        lazy.log.debug(
-          "[calICSCalendar] Refreshing " +
-            this.name +
-            (refreshAction.forceRefresh ? " (forced)" : "")
-        );
-        this.#doRefresh(refreshAction.forceRefresh);
-
-        // break queue processing here and wait for refresh to finish
-        // before processing further operations
-        break;
+          lazy.log.debug(
+            "[calICSCalendar] Refreshing " + this.name + (task.forceRefresh ? " (forced)" : "")
+          );
+          this.#doRefresh(task.forceRefresh);
+          return;
       }
     }
   }
@@ -802,29 +768,43 @@ export class CalICSCalendar extends cal.provider.BaseClass {
     this.#locked = true;
   }
 
-  #unlock(errCode) {
+  async #unlock(errCode) {
     if (!this.#locked) {
       lazy.log.warn("Calendar already unlocked.");
     }
 
-    this.#modificationActions.forEach(action => {
-      const listener = action.listener;
-      if (typeof listener == "function") {
-        listener(action.item);
-      } else if (listener) {
-        const args = action.opCompleteArgs;
-        // FIXME: dead code? opCompleteArgs doesn't seem like its ever set
-        if (!args) {
-          lazy.log.warn("opCompleteArgs missing");
+    if (this.#pendingModification) {
+      const task = this.#pendingModification;
+      if (errCode && !Components.isSuccessCode(errCode)) {
+        // The memory provider publishes edits before the file write completes.
+        // Restore its previous contents even if the recovery GET also fails.
+        this.#memoryCalendar.removeObserver(this.#observer);
+        try {
+          if (task.previous) {
+            await this.#memoryCalendar.addItem(task.previous);
+          } else {
+            await this.#memoryCalendar.deleteItem(task.item.parentItem);
+          }
+        } catch (error) {
+          this.#observer.onError(
+            this.superCalendar,
+            Ci.calIErrors.MODIFICATION_FAILED,
+            `Could not restore the calendar after a failed write: ${error.message}`
+          );
+        } finally {
+          this.#memoryCalendar.addObserver(this.#observer);
         }
-        if (Components.isSuccessCode(args[1]) && errCode && !Components.isSuccessCode(errCode)) {
-          listener.onOperationComplete(args[0], errCode, args[2], args[3], null);
-        } else {
-          listener.onOperationComplete(...args);
+        task.reject(new Components.Exception("Calendar write failed", errCode));
+        this.#observer.onLoad(this);
+        // A conflicting writer may also have changed the source.
+        if (this.#uri) {
+          this._queue.unshift({ action: "refresh", forceRefresh: true });
         }
+      } else {
+        task.resolve(task.item);
       }
-    });
-    this.#modificationActions = [];
+      this.#pendingModification = null;
+    }
 
     this.#locked = false;
     this.#processQueue();
@@ -1006,12 +986,17 @@ export class CalICSCalendar extends cal.provider.BaseClass {
             reject(new Error(`Backup ${url} FAILED; status=0x${status.toString(16)}`));
             return;
           }
-          if (doInitialBackup) {
-            const newName = makeName("initial");
-            await IOUtils.copy(result.path, PathUtils.join(backupDir.path, newName));
-          }
-          if (doDailyBackup) {
-            await IOUtils.copy(result.path, PathUtils.join(backupDir.path, dailyBackupFileName));
+          try {
+            if (doInitialBackup) {
+              const newName = makeName("initial");
+              await IOUtils.copy(result.path, PathUtils.join(backupDir.path, newName));
+            }
+            if (doDailyBackup) {
+              await IOUtils.copy(result.path, PathUtils.join(backupDir.path, dailyBackupFileName));
+            }
+          } catch (error) {
+            reject(error);
+            return;
           }
           resolve();
         },
@@ -1283,8 +1268,10 @@ class httpHooks {
 
 class fileHooks {
   #lastModified = null;
+  #forceRefresh = false;
 
-  onBeforeGet() {
+  onBeforeGet(aChannel, aForceRefresh) {
+    this.#forceRefresh = aForceRefresh;
     return true;
   }
 
@@ -1295,7 +1282,11 @@ class fileHooks {
    */
   onAfterGet(aChannel) {
     const filechannel = aChannel.QueryInterface(Ci.nsIFileChannel);
-    if (this.#lastModified && this.#lastModified == filechannel.file.lastModifiedTime) {
+    if (
+      !this.#forceRefresh &&
+      this.#lastModified &&
+      this.#lastModified == filechannel.file.lastModifiedTime
+    ) {
       return false;
     }
     this.#lastModified = filechannel.file.lastModifiedTime;

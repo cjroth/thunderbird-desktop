@@ -48,12 +48,10 @@ var DASCORE =
  * 2) We reissue the MATCH query so that we will be able to use offsets(), but
  *    we intersect the results of this MATCH against our LIMITed results from
  *    step 1.
- * - We use 'docid IN (phase 1 query)' to accomplish this because it results in
- *    efficient lookup.  If we just use a join, we get O(mn) performance because
- *    a cartesian join ends up being performed where either we end up performing
- *    the fulltext query M times and table scan intersect with the results from
- *    phase 1 or we do the fulltext once but traverse the entire result set from
- *    phase 1 N times.
+ * - CROSS JOIN keeps messagesText in the outer loop. SQLite scans the MATCH
+ *    results once, tests each docid against the limited set, then looks up
+ *    the surviving messages by primary key. With the opposite join order,
+ *    SQLite can repeat the MATCH scan for each of the selected messages.
  * - We believe that the re-execution of the MATCH query should have no disk
  *    costs because it should still be cached by SQLite or the OS.  In the case
  *    where memory is so constrained this is not true our behavior is still
@@ -70,7 +68,7 @@ var DASCORE =
  */
 var NUEVO_FULLTEXT_SQL =
   "SELECT messages.*, messagesText.*, offsets(messagesText) AS osets " +
-  "FROM messagesText, messages " +
+  "FROM messagesText CROSS JOIN messages " +
   "WHERE" +
   " messagesText MATCH ?1 " +
   " AND messagesText.docid IN (" +

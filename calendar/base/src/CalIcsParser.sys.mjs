@@ -5,6 +5,9 @@
 import { cal } from "resource:///modules/calendar/calUtils.sys.mjs";
 import { NetUtil } from "resource://gre/modules/NetUtil.sys.mjs";
 
+const MAX_COMPONENTS_PER_TASK = 32;
+const MAX_TASK_TIME_MS = 4;
+
 const lazy = {};
 ChromeUtils.defineLazyGetter(lazy, "log", () => {
   return console.createInstance({
@@ -118,13 +121,9 @@ CalIcsParser.prototype = {
         }
       }
 
-      // We are done, push the items to the parser and notify the listener
+      // Publish the results after linking all recurrence exceptions.
       self.mItems = self.mItems.concat(state.items);
       self.mComponents = self.mComponents.concat(state.extraComponents);
-
-      if (aAsyncParsing) {
-        aAsyncParsing.onParsingComplete(Cr.NS_OK, self);
-      }
     });
   },
 
@@ -206,6 +205,7 @@ CalIcsParser.prototype = {
 function parserState(aParser, aListener) {
   this.parser = aParser;
   this.listener = aListener;
+  this.pending = [];
 
   this.extraComponents = [];
   this.items = [];
@@ -216,8 +216,6 @@ function parserState(aParser, aListener) {
 
 parserState.prototype = {
   parser: null,
-  joinFunc: null,
-  threadCount: 0,
 
   extraComponents: null,
   items: null,
@@ -260,91 +258,98 @@ parserState.prototype = {
   },
 
   /**
-   * Submit processing of a subcomponent to the event queue
+   * Records a component for asynchronous parsing. Synchronous callers collect
+   * items immediately.
    *
    * @param {calIIcalComponent} subComp - The component to process.
-   * @param {boolean} isGCal - If this is a Google Calendar invitation.
+   * @param {boolean} isGCal - Whether this is a Google Calendar invitation.
    */
   submit(subComp, isGCal) {
-    const self = this;
-    const runner = {
-      run() {
-        let item = null;
-        switch (subComp.componentType) {
-          case "VEVENT":
-            item = new lazy.CalEvent();
-            item.icalComponent = subComp;
-            if (isGCal) {
-              cal.view.fixGoogleCalendarDescription(item);
-            }
-            self.checkTimezone(item, item.startDate);
-            self.checkTimezone(item, item.endDate);
-            break;
-          case "VTODO":
-            item = new lazy.CalTodo();
-            item.icalComponent = subComp;
-            self.checkTimezone(item, item.entryDate);
-            self.checkTimezone(item, item.dueDate);
-            // completed is defined to be in UTC
-            break;
-          case "VTIMEZONE":
-            // this should already be attached to the relevant
-            // events in the calendar, so there's no need to
-            // do anything with it here.
-            break;
-          default:
-            self.extraComponents.push(subComp);
-            break;
-        }
+    if (this.listener) {
+      this.pending.push([subComp, isGCal]);
+    } else {
+      this.processComponent(subComp, isGCal);
+    }
+  },
 
-        if (item) {
-          const rid = item.recurrenceId;
-          if (rid) {
-            self.excItems.push(item);
-          } else {
-            self.items.push(item);
-            if (item.recurrenceInfo) {
-              self.uid2parent[item.id] = item;
-            }
+  processComponent(subComp, isGCal) {
+    let item = null;
+    switch (subComp.componentType) {
+      case "VEVENT":
+        item = new lazy.CalEvent();
+        item.icalComponent = subComp;
+        if (isGCal) {
+          cal.view.fixGoogleCalendarDescription(item);
+        }
+        this.checkTimezone(item, item.startDate);
+        this.checkTimezone(item, item.endDate);
+        break;
+      case "VTODO":
+        item = new lazy.CalTodo();
+        item.icalComponent = subComp;
+        this.checkTimezone(item, item.entryDate);
+        this.checkTimezone(item, item.dueDate);
+        // completed is defined to be in UTC
+        break;
+      case "VTIMEZONE":
+        // this should already be attached to the relevant
+        // events in the calendar, so there's no need to
+        // do anything with it here.
+        break;
+      default:
+        this.extraComponents.push(subComp);
+        break;
+    }
+
+    if (item) {
+      const rid = item.recurrenceId;
+      if (rid) {
+        this.excItems.push(item);
+      } else {
+        this.items.push(item);
+        if (item.recurrenceInfo) {
+          this.uid2parent[item.id] = item;
+        }
+      }
+    }
+  },
+
+  /**
+   * Processes asynchronous components in input order, then finishes the parse.
+   * Queuing one task at a time lets UI and storage callbacks run between batches.
+   *
+   * @param {Function} finish - Resolves recurrence exceptions and publishes the parsed items.
+   */
+  join(finish) {
+    if (!this.listener) {
+      finish();
+      return;
+    }
+
+    let cursor = 0;
+    const processBatch = () => {
+      const deadline = Date.now() + MAX_TASK_TIME_MS;
+      const end = Math.min(cursor + MAX_COMPONENTS_PER_TASK, this.pending.length);
+      try {
+        while (cursor < end) {
+          const [subComp, isGCal] = this.pending[cursor++];
+          this.processComponent(subComp, isGCal);
+          if (Date.now() >= deadline) {
+            break;
           }
         }
-        self.threadCount--;
-        self.checkCompletion();
-      },
+        if (cursor < this.pending.length) {
+          Services.tm.dispatchToMainThread(processBatch);
+          return;
+        }
+        finish();
+      } catch (error) {
+        lazy.log.error("Processing the parsed ICS data failed", error);
+        this.listener.onParsingComplete(error.result ?? Cr.NS_ERROR_FAILURE, this.parser);
+        return;
+      }
+      this.listener.onParsingComplete(Cr.NS_OK, this.parser);
     };
-
-    this.threadCount++;
-    if (this.listener) {
-      // If we have a listener, we are doing this asynchronously. Go ahead
-      // and use the thread manager to dispatch the above runner
-      Services.tm.currentThread.dispatch(runner, Ci.nsIEventTarget.DISPATCH_NORMAL);
-    } else {
-      // No listener means synchronous. Just run the runner instead
-      runner.run();
-    }
-  },
-
-  /**
-   * Checks if the processing of all events has completed. If a join function
-   * has been set, this function is called.
-   *
-   * @returns {boolean} True, if all tasks have been completed.
-   */
-  checkCompletion() {
-    if (this.joinFunc && this.threadCount == 0) {
-      this.joinFunc();
-      return true;
-    }
-    return false;
-  },
-
-  /**
-   * Sets a join function that is called when all tasks have been completed
-   *
-   * @param {Function} joinFunc - The join function to call.
-   */
-  join(joinFunc) {
-    this.joinFunc = joinFunc;
-    this.checkCompletion();
+    Services.tm.dispatchToMainThread(processBatch);
   },
 };
