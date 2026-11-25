@@ -78,6 +78,10 @@ tags = ["compact"]
 
 ["test_query_messages_local.js"]
 
+["test_semantic_candidates.js"]
+
+["test_semantic_reranker.js"]
+
 ["test_smime_mimemsg_representation.js"]
 
 ["test_startup_offline.js"]

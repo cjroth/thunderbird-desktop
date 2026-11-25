@@ -742,6 +742,7 @@ pref("gloda.show_as_list_by_default", false);
 pref("mailnews.database.global.indexer.enabled", true);
 // Limit the number of gloda message results
 pref("mailnews.database.global.search.msg.limit", 1000);
+pref("mailnews.database.global.search.semantic.enabled", false);
 
 // Serif fonts look dated.  Switching those language families to sans-serif
 // where we think it makes sense.  Worth investigating for other font families

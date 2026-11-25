@@ -213,7 +213,9 @@ customElements.whenDefined("autocomplete-input").then(() => {
         }
         this.value = ""; // clear our value, to avoid persistence
         const args = {
-          searcher: new lazy.GlodaMsgSearcher(null, searchString),
+          searcher: new lazy.GlodaMsgSearcher(null, searchString, undefined, {
+            allowSemantic: true,
+          }),
         };
         if (Services.prefs.getBoolPref("mail.chat.enabled")) {
           args.IMSearcher = new lazy.GlodaIMSearcher(null, searchString);

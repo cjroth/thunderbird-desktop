@@ -77,6 +77,10 @@ add_task(async () => {
       pref: "mailnews.database.global.indexer.enabled",
     },
     {
+      checkboxID: "glodaSemanticSearch",
+      pref: "mailnews.database.global.search.semantic.enabled",
+    },
+    {
       checkboxID: "allowHWAccel",
       pref: "layers.acceleration.disabled",
       prefValues: [true, false],

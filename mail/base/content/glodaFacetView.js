@@ -30,6 +30,9 @@ var { GlodaSyntheticView } = ChromeUtils.importESModule(
 var { FacetDriver, FacetUtils } = ChromeUtils.importESModule(
   "resource:///modules/gloda/Facet.sys.mjs"
 );
+ChromeUtils.defineESModuleGetters(this, {
+  rerankMessages: "resource:///modules/gloda/GlodaSemanticReranker.sys.mjs",
+});
 
 var glodaFacetStrings = Services.strings.createBundle(
   "chrome://messenger/locale/glodaFacetView.properties"
@@ -63,6 +66,10 @@ const QueryExplanation = {
     );
     spanify(searchLabel, "explanation-fulltext-label");
 
+    if (aMsgSearcher.isSemantic) {
+      spanify(aMsgSearcher.searchString, "explanation-fulltext-term");
+      return;
+    }
     const criteriaText = glodaFacetStrings.GetStringFromName(
       "glodaFacetView.constraints.query.fulltext." +
         (aMsgSearcher.andTerms ? "and" : "or") +
@@ -488,6 +495,13 @@ var FacetContext = {
       }
       this._sortBy = val;
       this.build(this._sieveAll());
+      if (
+        val == "-dascore" &&
+        this.searcher?.isSemantic &&
+        !this._semanticRanking
+      ) {
+        this.rankByMeaning();
+      }
     } catch (e) {
       console.error(e);
     }
@@ -536,6 +550,11 @@ var FacetContext = {
   },
 
   initialBuild() {
+    this._semanticRanking?.abort();
+    this._semanticRanking = null;
+    const status = document.getElementById("semantic-search-status");
+    status.hidden = true;
+    delete status.dataset.state;
     if (this.searcher) {
       QueryExplanation.setFulltext(this.searcher);
     } else {
@@ -561,6 +580,73 @@ var FacetContext = {
       this.fullSet = this.fullSet.concat(this.IMCollection.items);
     }
     this.build(this.fullSet);
+    if (this.searcher?.isSemantic && this.sortBy == "-dascore") {
+      this.rankByMeaning();
+    }
+  },
+
+  /**
+   * Update relevance order in place once local inference finishes. The lexical
+   * candidates are already visible and may have been filtered or sorted by date.
+   */
+  async rankByMeaning() {
+    const collection = this.collection;
+    const messages = new Set(collection.items);
+    const candidates = this._relevantSortedItems.filter(item =>
+      messages.has(item)
+    );
+    if (candidates.length < 2) {
+      return;
+    }
+    const controller = new AbortController();
+    this._semanticRanking = controller;
+    const status = document.getElementById("semantic-search-status");
+    const setStatus = state => {
+      status.hidden = false;
+      status.dataset.state = state;
+      document.l10n.setAttributes(status, "gloda-semantic-" + state);
+    };
+    setStatus("ranking");
+    try {
+      const scores = await rerankMessages(
+        this.searcher.searchString,
+        candidates.map(
+          item =>
+            (item.subject || "").slice(0, 1024) +
+            "\n" +
+            (item.indexedBodyText || "").slice(0, 8192)
+        ),
+        { signal: controller.signal }
+      );
+      if (controller.signal.aborted || this.collection != collection) {
+        return;
+      }
+      if (
+        scores.length != candidates.length ||
+        !scores.every(Number.isFinite)
+      ) {
+        throw new Error("Invalid semantic search scores");
+      }
+      const scoresByItem = new Map(
+        candidates.map((item, i) => [item, scores[i]])
+      );
+      // Stable sort preserves lexical order for tied logits. Membership and
+      // facet counts are unchanged, so only the message order needs updating.
+      candidates.sort((a, b) => scoresByItem.get(b) - scoresByItem.get(a));
+      const ranked = candidates.values();
+      this._relevantSortedItems = this._relevantSortedItems.map(item =>
+        messages.has(item) ? ranked.next().value : item
+      );
+      if (this.sortBy == "-dascore") {
+        this._activeSet = this._sieveAll();
+        this._showResults();
+      }
+      setStatus("ranked");
+    } catch {
+      if (!controller.signal.aborted && this.collection == collection) {
+        setStatus("fallback");
+      }
+    }
   },
 
   /**
@@ -1080,6 +1166,11 @@ function reachOutAndTouchFrame() {
     .QueryInterface(Ci.nsIDocShellTreeItem);
 
   FacetContext.rootWin = us.rootTreeItem.domWindow;
+  window.addEventListener(
+    "pagehide",
+    () => FacetContext._semanticRanking?.abort(),
+    { once: true }
+  );
 
   const parentWin = us.parent.domWindow;
   const aTab = (FacetContext.tab = parentWin.tab);
