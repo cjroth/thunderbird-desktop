@@ -77,7 +77,38 @@
 }
 
 #bottom-events-box {
-  min-block-size: 100px;
+  /* The splitter's saved height limits long lists. Short lists size to
+   * their contents even when the splitter has written an inline height. */
+  flex: 0 1 content;
+  min-block-size: 0;
+  max-block-size: attr(height px, clamp(12rem, 29vh, 21rem));
+}
+
+#unifinder-search-results-tree {
+  --event-row-height: round(up, 1.8rem, 2px);
+  display: grid;
+  grid-template-rows: max-content minmax(0, 1fr);
+  flex: 0 1 auto;
+  min-block-size: 0;
+
+  :root[uidensity="compact"] & {
+    --event-row-height: round(up, 1.6rem, 2px);
+  }
+
+  :root[uidensity="touch"] & {
+    --event-row-height: round(up, 2.4rem, 2px);
+  }
+
+  & treechildren {
+    block-size: calc(var(--event-result-count, 0) * var(--event-row-height));
+    min-block-size: 0;
+    max-block-size: 100%;
+  }
+
+  & treechildren::-moz-tree-row {
+    block-size: var(--event-row-height);
+    min-block-size: 0;
+  }
 }
 
 #view-box {
@@ -89,4 +120,66 @@
 }
 #calendar-deactivated-notification-location-events:has(notification-message) {
   min-block-size: 40px;
+}
+
+#bottom-events-box #unifinder-searchBox {
+  block-size: auto;
+  flex-shrink: 0;
+  justify-content: flex-start;
+  padding: 8px 14px;
+  border-block-end: 0;
+}
+
+#unifinder-searchBox .calendar-event-search {
+  max-inline-size: 32rem;
+}
+
+#unifinder-closer {
+  margin-inline-start: auto;
+}
+
+@media (prefers-contrast: no-preference) {
+  #bottom-events-box,
+  #bottom-events-box #unifinder-searchBox,
+  #unifinder-search-results-tree {
+    background-color: var(--desk-surface);
+    color: var(--desk-ink);
+  }
+
+  #unifinder-search-field {
+    background-color: var(--desk-canvas);
+    color: var(--desk-ink);
+    border-color: var(--desk-line);
+    border-radius: 6px;
+  }
+
+  #unifinder-search-results-tree :is(treecol, treecolpicker) {
+    appearance: none;
+    background: var(--desk-surface);
+    border: 0;
+    border-block-end: 1px solid var(--desk-line);
+    color: var(--color-text-secondary);
+    font-size: 0.9rem;
+  }
+
+  #unifinder-search-results-tree treechildren::-moz-tree-row {
+    background-color: var(--desk-surface);
+    border-block-end: 1px solid var(--desk-line);
+  }
+
+  #unifinder-search-results-tree treechildren::-moz-tree-row(odd) {
+    background-color: color-mix(in srgb, var(--desk-ink) 5%, var(--desk-surface));
+  }
+
+  #unifinder-search-results-tree treechildren::-moz-tree-row(hover) {
+    background-color: var(--desk-accent-soft);
+  }
+
+  #unifinder-search-results-tree treechildren::-moz-tree-row(selected) {
+    background-color: color-mix(in srgb, var(--desk-accent) 22%, var(--desk-surface));
+  }
+
+  #unifinder-search-results-tree treechildren::-moz-tree-cell-text(selected) {
+    color: var(--desk-ink);
+  }
 }

@@ -598,6 +598,21 @@ spaces-toolbar-button-mail2 =
 
 spaces-navigation-contacts = Contacts
 
+spaces-placement-button =
+    .title = Spaces toolbar placement
+    .aria-label = Spaces toolbar placement
+spaces-placement-pinned-button =
+    .label = Spaces
+    .tooltiptext = Open Spaces menu
+spaces-placement-menu =
+    .label = Spaces Layout
+spaces-placement-top =
+    .label = Top
+spaces-placement-left =
+    .label = Left
+spaces-placement-dropdown =
+    .label = Dropdown
+
 spaces-toolbar-button-address-book2 =
     .title = Address Book
 

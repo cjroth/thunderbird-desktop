@@ -44,7 +44,7 @@ class CalendarFilteredTreeView extends CalendarFilteredViewMixin(PROTO_TREE_VIEW
       this._rowMap = Array.from(this.#allRows);
     }
 
-    this._tree?.endUpdateBatch();
+    this.#finishRowUpdate();
 
     // Ensure that no items remain selected after filter change.
     this.selection.clearSelection();
@@ -186,6 +186,14 @@ class CalendarFilteredTreeView extends CalendarFilteredViewMixin(PROTO_TREE_VIEW
     selection.selectEventsSuppressed = false;
   }
 
+  /** @type {((count: number) => void)?} */
+  onRowCountChanged = null;
+
+  #finishRowUpdate() {
+    this._tree?.endUpdateBatch();
+    this.onRowCountChanged?.(this.rowCount);
+  }
+
   // CalendarFilteredViewMixin implementation
 
   clearItems() {
@@ -193,7 +201,7 @@ class CalendarFilteredTreeView extends CalendarFilteredViewMixin(PROTO_TREE_VIEW
 
     this._tree?.beginUpdateBatch();
     this._rowMap.length = 0;
-    this._tree?.endUpdateBatch();
+    this.#finishRowUpdate();
 
     this.selection?.clearSelection();
   }
@@ -219,7 +227,7 @@ class CalendarFilteredTreeView extends CalendarFilteredViewMixin(PROTO_TREE_VIEW
     }
 
     this.#restoreSelection();
-    this._tree?.endUpdateBatch();
+    this.#finishRowUpdate();
   }
 
   removeItems(items) {
@@ -250,7 +258,7 @@ class CalendarFilteredTreeView extends CalendarFilteredViewMixin(PROTO_TREE_VIEW
     }
 
     this.#restoreSelection();
-    this._tree?.endUpdateBatch();
+    this.#finishRowUpdate();
   }
 
   removeItemsFromCalendar(calendarId) {

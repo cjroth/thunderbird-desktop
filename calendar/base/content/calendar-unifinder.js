@@ -65,6 +65,9 @@ async function prepareCalendarUnifinder() {
   filteredView.itemType = Ci.calICalendar.ITEM_FILTER_TYPE_EVENT;
 
   const unifinderTree = getUnifinderTree();
+  filteredView.onRowCountChanged = count => {
+    unifinderTree.style.setProperty("--event-result-count", count);
+  };
   unifinderTree.view = filteredView;
 
   const viewBox = getViewBox();

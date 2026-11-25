@@ -75,6 +75,10 @@ body {
   --folderPaneSplitter-width: clamp(10.5em, 16vw, 16em);
   --messagePaneSplitter-width: clamp(18em, 51vw, 68em);
   --messagePaneSplitter-height: 36em;
+  --mail-empty-heading: 550 clamp(1.35rem, 2vw, 1.8rem)/1.2 var(--desk-font);
+  --folder-pane-min-width: 100px;
+  --mail-pane-min-width: 300px;
+  --thread-pane-min-height: 110px;
 
   /* Classic layout: folder tree on the left, thread tree and message browser on the right. */
   &.layout-classic {
@@ -101,6 +105,50 @@ body {
       / minmax(auto, var(--folderPaneSplitter-width)) min-content minmax(auto, 1fr);
   }
 
+  /* After a divider is set, its neighbours have explicit preferred sizes.
+   * Use those as track maxima so the reader takes spare space, and the
+   * neighbours can still shrink when the reader reaches its minimum. */
+  &:not(.account-central):has(> #messagePaneSplitter.splitter-flexible) {
+    &.layout-vertical {
+      grid-template-columns:
+        minmax(min(var(--folder-pane-min-width), var(--folderPaneSplitter-width)), max-content) min-content
+        minmax(var(--mail-pane-min-width), max-content) min-content minmax(auto, 1fr);
+
+      & :is(#folderPane, #threadPane) {
+        max-inline-size: 100%;
+      }
+    }
+
+    &:is(.layout-classic, .layout-wide) {
+      grid-template-rows: minmax(var(--thread-pane-min-height), max-content) min-content minmax(auto, 1fr);
+
+      & :is(#threadPane, #folderPane) {
+        max-block-size: 100%;
+      }
+    }
+  }
+
+  &:not(.account-central):not(:has(.reader-compose:not([inert]))):has(#threadTree > slot.show > #placeholderNoMessages:not([hidden])) {
+    grid-template:
+      "folders folderPaneSplitter threads" minmax(0, 1fr)
+      / minmax(auto, var(--folderPaneSplitter-width)) min-content minmax(0, 1fr);
+
+    & #messagePaneSplitter {
+      display: none;
+    }
+
+    /* Fill the available track even when the splitter remembers a smaller list. */
+    & #threadPane {
+      min-inline-size: 100%;
+      max-inline-size: 100%;
+    }
+
+    & :is(#threadPane, #folderPane) {
+      min-block-size: 100%;
+      max-block-size: 100%;
+    }
+  }
+
   /* If Account Central is shown, it overrides the layout setting. */
   &.account-central {
     grid-template:
@@ -108,7 +156,7 @@ body {
       / minmax(auto, var(--folderPaneSplitter-width)) min-content minmax(auto, 1fr);
   }
 
-  &.account-central :is(#threadPane, #messagePaneSplitter, #messagePane, ) {
+  &.account-central :is(#threadPane, #messagePaneSplitter) {
     display: none;
   }
 
@@ -121,7 +169,7 @@ body {
   display: none;
 }
 
-#messagePane:not(:has(> :is(#webBrowser, #messageBrowser, #multiMessageBrowser, conversation-view):not([hidden]))) .reader-placeholder {
+#messagePane:not(:has(.reader-compose:not([inert]))):not(:has(> :is(#webBrowser, #messageBrowser, #multiMessageBrowser, conversation-view):not([hidden]))) .reader-placeholder {
   display: grid;
   place-content: center;
   justify-items: center;
@@ -131,7 +179,7 @@ body {
   text-align: center;
 
   & p {
-    font: 550 clamp(1.35rem, 2vw, 1.8rem)/1.2 var(--desk-font);
+    font: var(--mail-empty-heading);
     letter-spacing: -0.035em;
     margin: 4px 14px 0;
     text-wrap: balance;
@@ -187,7 +235,7 @@ body.account-central .reader-open-first {
   grid-area: folders;
   box-sizing: border-box;
   /* Matches the collapse-width on the splitter. */
-  min-inline-size: 100px;
+  min-inline-size: var(--folder-pane-min-width);
   overflow: hidden;
   background-color: var(--sidebar-background);
   color: var(--sidebar-color);
@@ -206,8 +254,8 @@ body.account-central .reader-open-first {
   container-type: inline-size;
   grid-area: threads;
   box-sizing: border-box;
-  min-block-size: 110px;
-  min-inline-size: 300px;
+  min-block-size: var(--thread-pane-min-height);
+  min-inline-size: var(--mail-pane-min-width);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -223,21 +271,50 @@ body.account-central .reader-open-first {
   box-sizing: border-box;
   background: var(--desk-canvas);
 
-  &:has(> #messageBrowser:not([hidden])) {
-    padding: clamp(9px, 1.65vw, 26px);
+  container: mail-reader / size;
+
+  &:has(> #messageBrowser:not([hidden]), > .reader-compose:not([inert])) {
+    --reader-frame-inset: clamp(6px, 1.25vw, 20px);
+    --reader-frame-radius: 12px;
+    padding: calc(var(--reader-frame-inset) + 1px);
+
+    /* The closed reply entry shares the message sheet. */
+    &:not(:has(> .reader-compose:not([inert])))::before {
+      content: "";
+      position: absolute;
+      z-index: -1;
+      inset: var(--reader-frame-inset);
+      border: 1px solid var(--desk-line);
+      border-radius: var(--reader-frame-radius);
+      background: var(--desk-surface);
+      box-shadow: 0 2px 8px color-mix(in srgb, var(--desk-ink) 5%, transparent);
+      pointer-events: none;
+    }
+
+    & > #messageBrowser {
+      border-radius: calc(var(--reader-frame-radius) - 1px);
+      overflow: clip;
+    }
+  }
+
+  &:has(> .reader-compose:not([inert])) {
+    padding: var(--reader-frame-inset);
+    gap: clamp(8px, 1vw, 12px);
+
+    & > #messageBrowser {
+      border: 1px solid var(--desk-line);
+      border-radius: var(--reader-frame-radius);
+    }
   }
 
   & > #messageBrowser {
     min-block-size: 0;
-    border-radius: 12px;
-    overflow: clip;
-    border: 1px solid var(--desk-line);
-    background-color: var(--desk-surface);
-    box-shadow: 0 2px 6px color-mix(in srgb, var(--desk-ink) 6%, transparent);
+    min-inline-size: 0;
+    background: var(--desk-surface);
   }
   /* Matches the collapse-height and collapse-width on the splitter. */
   min-block-size: 100px;
-  min-inline-size: 300px;
+  min-inline-size: var(--mail-pane-min-width);
   overflow: auto;
   display: flex;
   flex-direction: column;
@@ -250,6 +327,8 @@ body.account-central .reader-open-first {
   min-inline-size: 400px;
 }
 
+body.account-central > #messagePane,
+body:not(:has(.reader-compose:not([inert]))):has(#threadTree > slot.show > #placeholderNoMessages:not([hidden])) > #messagePane,
 :is(#messagePane, #folderPane).collapsed-by-splitter {
   /* NOTE: We use "display: none" rather than "visibility: collapse". In the
    * latter case, the min-width of min-height of the element would still
@@ -260,6 +339,16 @@ body.account-central .reader-open-first {
    * in a grid-area, which means that there is no auto-placement of the grid
    * items that would fill the track. */
   display: none;
+
+  /* Unframing an editor destroys its Gecko editing session, including undo.
+   * Park the pane outside the grid while any drafts are open. */
+  &:has(> .reader-compose) {
+    display: flex;
+    position: absolute;
+    grid-area: auto;
+    inset: 0;
+    visibility: hidden;
+  }
 }
 
 /* Folder tree pane. */
@@ -790,12 +879,9 @@ body.account-central .reader-open-first {
 }
 
 @media (max-width: 900px) {
-  #messagePane:has(> #messageBrowser:not([hidden])) {
-    padding: 6px;
-  }
-
-  .layout-vertical :is(#threadPane, #messagePane) {
-    min-inline-size: 220px;
+  .layout-vertical {
+    /* Reserve the folder minimum and both one-pixel dividers first. */
+    --mail-pane-min-width: clamp(0px, (100vw - var(--folder-pane-min-width) - 2px) / 2, 220px);
   }
 }
 
@@ -948,8 +1034,56 @@ body.account-central .reader-open-first {
   flex: 1;
 }
 
-#placeholderNoMessages::before {
-  background-image: var(--icon-mail-lg);
+#threadTree > slot.show:has(> #placeholderNoMessages:not([hidden])) {
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding-inline: 1rem;
+  opacity: 1;
+  pointer-events: none;
+}
+
+#threadTree:has(thead:not([hidden])) > slot.show:has(> #placeholderNoMessages:not([hidden])) {
+  inset-block-start: var(--tree-header-table-height);
+}
+
+#placeholderNoMessages:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-block-size: 100%;
+  margin: 0;
+  color: var(--desk-ink);
+  font: var(--mail-empty-heading);
+  letter-spacing: -0.035em;
+  text-align: center;
+  text-wrap: balance;
+  text-shadow: none;
+
+  &::before {
+    content: none;
+  }
+}
+
+.mail-nesting-bird {
+  inline-size: 104px;
+  block-size: 97px;
+  filter: drop-shadow(0 3px 4px color-mix(in srgb, var(--desk-ink) 8%, transparent));
+  min-block-size: 0;
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .mail-nesting-bird:hover .mail-nesting-bird-body {
+    animation: mail-bird-hop 450ms ease-in-out;
+  }
+}
+
+@keyframes mail-bird-hop {
+  45% {
+    transform: translateY(-4px);
+  }
 }
 
 #placeholderMultipleFolders::before {
@@ -1013,4 +1147,179 @@ conversation-view {
   > .container
   > .account-indicator {
   display: inline-flex;
+}
+
+/* Keep parked editors laid out. Gecko tears down their editing sessions if
+ * their frame is removed from layout while switching messages. */
+.reader-compose[inert] {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+}
+
+#messagePane {
+  --reader-gutter: max(clamp(16px, 4.5cqi, 48px), calc((100cqi - 720px) / 2));
+}
+
+.reader-reply-entry:not([hidden]) {
+  padding: 10px var(--reader-gutter) clamp(12px, 2.8cqh, 24px);
+}
+
+.reader-reply-launch {
+  appearance: none;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  inline-size: 100%;
+  min-inline-size: 0;
+  min-block-size: 44px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--desk-line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--desk-canvas) 45%, var(--desk-surface));
+  color: var(--desk-muted);
+  font: 500 1rem/1.4 var(--desk-font);
+  text-align: start;
+}
+
+.reader-reply-launch::before,
+.reader-compose > header > strong::before,
+.reader-compose > header > button::before {
+  content: "";
+  flex: none;
+  inline-size: 16px;
+  block-size: 16px;
+  background-color: currentColor;
+  mask: var(--icon-reply) center / contain no-repeat;
+}
+
+.reader-reply-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reader-reply-launch kbd {
+  font: 500 0.82rem/1.4 var(--desk-font);
+  border: 1px solid var(--desk-line);
+  border-radius: 4px;
+  padding-inline: 5px;
+}
+
+.reader-reply-launch:is(:hover, :focus-visible) {
+  color: var(--desk-ink);
+  border-color: color-mix(in srgb, var(--desk-accent) 55%, var(--desk-line));
+  background: var(--desk-surface);
+}
+
+#messagePane:has(.reader-compose:not([inert])) > .reader-reply-entry,
+#messagePane:has(.reader-compose:is(.compose-solo, .compose-expanded):not([inert])) >
+  :is(#messageBrowser, #multiMessageBrowser, #webBrowser, conversation-view) {
+  display: none;
+}
+
+.reader-compose {
+  box-sizing: border-box;
+  display: flex;
+  flex: 0 1 clamp(300px, 51cqh, 520px);
+  flex-direction: column;
+  min-block-size: 0;
+  min-inline-size: 0;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--desk-line);
+  border-radius: 12px;
+  background: var(--desk-surface);
+  box-shadow: 0 4px 18px color-mix(in srgb, var(--desk-ink) 5%, transparent);
+
+  &:is(.compose-expanded, .compose-solo) {
+    flex: 1;
+  }
+
+  & > header {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 2px;
+    min-block-size: 40px;
+    padding-inline: max(14px, calc((100% - 720px) / 2)) max(7px, calc((100% - 720px) / 2));
+    color: var(--desk-ink);
+  }
+
+  & > header > strong {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex: 1;
+    font: 650 1rem/1.3 var(--desk-font);
+  }
+
+  & > header > strong::before {
+    color: var(--desk-accent);
+  }
+
+  &[data-uri=""] > header > strong::before {
+    mask-image: var(--icon-new-mail);
+  }
+
+  & > header > button {
+    appearance: none;
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+    inline-size: 28px;
+    min-inline-size: 28px;
+    block-size: 28px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--desk-muted);
+  }
+
+  & > header > button:hover {
+    color: var(--desk-ink);
+    background: var(--desk-accent-soft);
+  }
+
+  & .reader-compose-close::before {
+    mask-image: var(--icon-close);
+  }
+
+  & .reader-compose-expand::before {
+    mask-image: var(--icon-maximize-sm);
+  }
+
+  &.compose-expanded .reader-compose-expand::before {
+    mask-image: var(--icon-restore);
+  }
+
+  &.compose-solo .reader-compose-expand {
+    display: none;
+  }
+
+  & > browser {
+    flex: 1;
+    min-inline-size: 0;
+    min-block-size: 0;
+  }
+}
+
+@container mail-reader (max-height: 440px) {
+  .reader-compose:not(.compose-expanded, .compose-solo) {
+    flex-basis: 70cqh;
+  }
+}
+
+@media (forced-colors: active) {
+  .reader-reply-launch::before,
+  .reader-compose > header > strong::before,
+  .reader-compose > header > button::before {
+    forced-color-adjust: none;
+    background-color: ButtonText;
+  }
 }

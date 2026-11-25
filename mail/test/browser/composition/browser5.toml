@@ -57,6 +57,8 @@ support-files = [
 ["browser_enterpriseForcedShutdown.js"]
 skip-if = ["!enterprise"]
 
+["browser_readerCompose.js"]
+
 ["browser_redirect.js"]
 
 ["browser_remove_text_styling.js"]

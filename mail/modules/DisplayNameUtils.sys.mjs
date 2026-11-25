@@ -7,6 +7,7 @@ import { MailServices } from "resource:///modules/MailServices.sys.mjs";
 export var DisplayNameUtils = {
   formatDisplayName,
   formatDisplayNameList,
+  getMonogram,
 };
 
 // XXX: Maybe the strings for this file should go in a separate bundle?
@@ -20,6 +21,24 @@ ChromeUtils.defineLazyGetter(
   "l10n",
   () => new Localization(["messenger/messenger.ftl"], true)
 );
+
+/**
+ * Derive a correspondent's initials and palette index for message surfaces.
+ *
+ * @param {string} correspondent - A display name or mailbox.
+ * @returns {{initials: string, tone: number}}
+ */
+function getMonogram(correspondent) {
+  const name = correspondent.split(/[<@,]/u, 1)[0].normalize();
+  const words = name.match(/[\p{L}\p{N}][\p{L}\p{N}\p{M}]*/gu) || [];
+  const first = words[0]?.match(/^.\p{M}*/u)[0] || "";
+  const last = words.length > 1 ? words.at(-1).match(/^.\p{M}*/u)[0] : "";
+  const tone = Array.from(name).reduce(
+    (hash, char) => (hash * 31 + char.codePointAt(0)) % 6,
+    0
+  );
+  return { initials: (first + last).toLocaleUpperCase(), tone };
+}
 
 function _getIdentityForAddress(aEmailAddress) {
   const emailAddress = aEmailAddress.toLowerCase();

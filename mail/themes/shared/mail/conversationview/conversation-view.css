@@ -10,20 +10,28 @@
 @namespace xul url("http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul");
 @namespace html "http://www.w3.org/1999/xhtml";
 
+:host {
+  --conversation-gutter: max(clamp(16px, 4.5cqi, 48px), calc((100% - 720px) / 2));
+  background: var(--desk-surface);
+  color: var(--desk-ink);
+}
+
 header {
   display: grid;
-  grid-template-columns: 1fr max-content;
+  grid-template-columns: minmax(0, 1fr) auto;
   grid-template-rows: 1fr;
   gap: 9px 6px;
   align-items: center;
   position: sticky;
   inset-block-start: 0;
-  padding: 12px clamp(12px, 3vi, 28px);
-  background: var(--color-surface-lower);
+  padding: clamp(16px, 4cqi, 36px) var(--conversation-gutter) 16px;
+  z-index: 1;
+  background: var(--desk-surface);
   color: var(--color-text-base);
   border-block-end: 1px solid var(--color-surface-border);
 
   & .info {
+    grid-row: 2;
     display: flex;
     flex-wrap: nowrap;
     gap: 6px;
@@ -44,11 +52,11 @@ header {
   }
 
   & .title {
+    grid-row: 1;
+    overflow-wrap: anywhere;
     margin-block: 0;
-    font-family: var(--desk-display);
-    font-size: 1.75rem;
-    line-height: 1.2;
-    font-weight: 400;
+    font: 650 clamp(1.28rem, calc(0.93rem + 1.75cqi), 2.12rem)/1.18 var(--desk-font);
+    letter-spacing: -0.032em;
   }
 
   & :is(.toolbar, .actions) {
@@ -62,15 +70,19 @@ header {
   block-size: 100%;
 
   & article {
+    min-inline-size: 0;
     display: grid;
-    grid-template-columns: 1fr max-content;
+    grid-template-columns: minmax(0, 1fr) auto;
     grid-template-rows: 1fr;
     gap: 6px 3px;
     align-items: center;
-    padding: 12px clamp(12px, 3vi, 28px);
+    padding: 14px var(--conversation-gutter);
 
     &[aria-expanded="false"] {
       cursor: pointer;
+      &:hover {
+        background: color-mix(in srgb, var(--desk-accent) 5%, var(--desk-surface));
+      }
     }
 
     &[aria-expanded="true"] {
@@ -80,6 +92,7 @@ header {
 
       & xul|browser {
         display: block;
+        grid-column: 1 / -1;
         block-size: 100%;
         inline-size: 100%;
       }
@@ -102,6 +115,8 @@ header {
     }
 
     & p {
+      color: var(--desk-muted);
+      line-height: 1.5;
       text-overflow: ellipsis;
       overflow: hidden;
       white-space: nowrap;

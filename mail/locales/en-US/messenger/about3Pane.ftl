@@ -732,6 +732,44 @@ threadpane-card-menu-button =
 
 message-list-placeholder-no-messages = No message found
 
+# Shown when the Inbox is empty. $line is a randomly chosen integer from 0 to 7.
+message-list-placeholder-inbox-zero =
+    { $line ->
+        [0] Nothing but tailwinds.
+        [1] Look at you, all caught up.
+        [2] Even the carrier pigeons have the day off.
+        [3] Inbox zero. Take a victory lap.
+        [4] The early bird cleared the inbox.
+        [5] Your inbox called it a day.
+        [6] Not a peep in here.
+       *[7] You’ve got… absolutely nothing.
+    }
+
+# Empty Unread and Starred tabs in the Inbox. $line is a random integer from 0 to 7.
+message-list-placeholder-inbox-unread =
+    { $line ->
+        [0] Read ’em all.
+        [1] Not an unread peep.
+        [2] Every envelope’s been opened.
+        [3] You’re all caught up. Coffee?
+        [4] No unread mail on the horizon.
+        [5] The unread count is taking a nap.
+        [6] Nothing left in bold.
+       *[7] Up to date, down to the last email.
+    }
+
+message-list-placeholder-inbox-starred =
+    { $line ->
+        [0] A clear night. No stars yet.
+        [1] Your constellation starts with one star.
+        [2] No mail on the A-list yet.
+        [3] The hall of fame is open for nominations.
+        [4] No stars in this little sky.
+        [5] Star a favorite. Make its day.
+        [6] Your shortlist is very short.
+       *[7] Starlight pending.
+    }
+
 message-list-placeholder-multiple-folders = Multiple folders selected
 
 message-reader-select-message = Select a message to read
@@ -792,3 +830,18 @@ folder-delete-no-trash-confirm = Deleting this folder is not undoable and will d
 # Variables:
 #   $name (String) - Name of the folder being deleted.
 folder-delete-filter-confirm = Deleting the folder ‘{ $name }’ will disable its associated filter(s). Are you sure you want to delete the folder?
+
+reader-compose-new = New message
+reader-compose-reply = Reply
+reader-compose-close =
+    .aria-label = Close draft
+    .title = Close draft
+reader-compose-expand =
+    .aria-label = Expand reply
+    .title = Expand reply
+reader-compose-restore =
+    .aria-label = Show original message
+    .title = Show original message
+reader-write-reply = Write a reply…
+# $sender is the name of the person who will receive the reply.
+reader-reply-to-sender = Reply to { $sender }…

@@ -540,6 +540,7 @@
 
     _updateAvatar() {
       this.avatar.replaceChildren();
+      delete this.avatar.dataset.tone;
 
       if (!this.cardDetails.card) {
         this._createAvatarPlaceholder();
@@ -567,12 +568,11 @@
 
     _createAvatarPlaceholder() {
       const letter = document.createElement("span");
-      letter.textContent =
-        Array.from(
-          (this.nameLine.textContent || this.displayName || this.fullAddress)
-            ?.normalize()
-            .replaceAll(/[^\p{Letter}\p{Nd}]+/gu, "")
-        )[0]?.toUpperCase() || "";
+      const { initials, tone } = lazy.DisplayNameUtils.getMonogram(
+        this.nameLine.textContent || this.displayName || this.fullAddress || ""
+      );
+      letter.textContent = initials;
+      this.avatar.dataset.tone = String(tone);
       letter.setAttribute("aria-hidden", "true");
       this.avatar.appendChild(letter);
       this.avatar.classList.remove("has-avatar");

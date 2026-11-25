@@ -1265,18 +1265,21 @@ calendar-event-box .calendar-item-container > .location-desc:not([hidden]) {
     background-color: var(--desk-accent-soft);
   }
 
-  .multiday-grid:not(.multiday-grid-rotated) .day-column-heading,
-  .multiday-grid:not(.multiday-grid-rotated) calendar-header-container {
-    border-inline: 0;
-  }
+  .multiday-grid:not(.multiday-grid-rotated) .day-column-container {
+    /* Each column owns its leading divider from the date to the last hour. */
+    & :is(.day-column-heading, calendar-header-container) {
+      border-inline-start: 1px solid var(--viewBorderColor);
+      border-inline-end: 0;
+      background-color: var(--desk-surface);
+    }
 
-  .multiday-grid:not(.multiday-grid-rotated) calendar-header-container {
-    border-block-end-width: 1px;
-    background-color: var(--desk-surface);
+    & calendar-header-container {
+      border-block-end-width: 1px;
+    }
   }
 
   .multiday-grid:not(.multiday-grid-rotated) .day-column-selected .multiday-hour-box {
-    border-inline-end-color: transparent;
+    border-inline-end: 0;
   }
 
   .multiday-grid:not(.multiday-grid-rotated) calendar-event-column .multiday-hour-box {
@@ -1585,7 +1588,7 @@ calendar-editable-item[status="CANCELLED"],
   align-items: center;
   justify-content: space-between;
   gap: 12px 24px;
-  padding: clamp(15px, 2.4cqi, 29px) clamp(14px, 2.4cqi, 32px);
+  padding: clamp(12px, 1.4cqi, 18px) clamp(14px, 2.4cqi, 32px);
   background-color: var(--color-surface-base);
   color: var(--color-text-base);
 }

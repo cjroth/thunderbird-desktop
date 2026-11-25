@@ -155,14 +155,13 @@ async function test_spaceToolbar(background, selectedTheme, manifestIcons) {
         );
       }
 
-      const collapseButton = document.getElementById("collapseButton");
       const revealButton = document.getElementById("spacesToolbarReveal");
       const pinnedButton = document.getElementById("spacesPinnedButton");
       const pinnedPopup = document.getElementById("spacesButtonMenuPopup");
 
       Assert.ok(revealButton.hidden, "The status bar toggle button is hidden");
       Assert.ok(pinnedButton.hidden, "The pinned titlebar button is hidden");
-      collapseButton.click();
+      window.gSpacesToolbar.setPlacement("dropdown");
       Assert.ok(
         !revealButton.hidden,
         "The status bar toggle button is not hidden"

@@ -81,6 +81,12 @@ var mailTabType = {
       _nextId: 1,
       isDefault: true,
 
+      tryCloseTab(tab) {
+        return (
+          tab.chromeBrowser.contentWindow.messagePane?.canCloseEditors() ?? true
+        );
+      },
+
       openTab(tab, args = {}) {
         mailTabType._cloneTemplate(
           "mail3PaneTabTemplate",
@@ -375,3 +381,16 @@ var mailTabType = {
     },
   },
 };
+
+window.addEventListener("close", event => {
+  const tabs = document.getElementById("tabmail")?.tabInfo || [];
+  for (const tab of tabs) {
+    if (
+      tab.mode.name == "mail3PaneTab" &&
+      tab.chromeBrowser.contentWindow.messagePane?.canCloseEditors() === false
+    ) {
+      event.preventDefault();
+      break;
+    }
+  }
+});

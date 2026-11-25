@@ -6,6 +6,12 @@ var { MailServices } = ChromeUtils.importESModule(
   "resource:///modules/MailServices.sys.mjs"
 );
 
+// This suite exercises native window commands, dialogs and close notifications.
+// Reader-specific tests enable the embedded editor explicitly.
+add_setup(async function () {
+  await SpecialPowers.pushPrefEnv({ set: [["mail.compose.inReader", false]] });
+});
+
 // We want to check that everything has been removed/reset, but if we register
 // a cleanup function here, it will run before any other cleanup function has
 // had a chance to run. Instead, when it runs register another cleanup

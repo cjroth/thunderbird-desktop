@@ -322,3 +322,75 @@ add_task(async function test_classic_layout_has_no_pane_gaps() {
     await closePromise;
   }
 });
+
+add_task(async function test_saved_divider_fits_a_smaller_window() {
+  // Exercise width locks in Vertical view and height locks in both stacked views.
+  for (const layout of [2, 0, 1]) {
+    const dimension = layout == 2 ? "width" : "height";
+    const savedSize = layout == 2 ? 420 : 270;
+    await SpecialPowers.pushPrefEnv({
+      set: [["mail.pane_config.dynamic", layout]],
+    });
+    const win = await open3PaneWindow(
+      folder,
+      "chrome,all,dialog=no,width=1150,height=800"
+    );
+    try {
+      const pane = win.document.getElementById("tabmail").currentAbout3Pane;
+      const { body, threadPane, messagePane, splitter } = getPanes(pane);
+      pane.paneLayout.messagePaneVisible = true;
+      pane.threadTree.selectedIndex = 0;
+      const reader = pane.document.getElementById("messageBrowser");
+      await TestUtils.waitForCondition(() => reader.contentWindow?.gMessageURI);
+      const messageURI = reader.contentWindow.gMessageURI;
+      const wideWidth = win.outerWidth;
+      const wideHeight = win.outerHeight;
+      splitter[dimension] = savedSize;
+      await TestUtils.waitForCondition(
+        () =>
+          Math.abs(
+            messagePane.getBoundingClientRect()[dimension] - savedSize
+          ) <= FUZZ,
+        "the divider should reach its preferred size"
+      );
+      const listBefore = threadPane.getBoundingClientRect()[dimension];
+      const bodyBefore = body.getBoundingClientRect()[dimension];
+      win.resizeTo(620, 420);
+      await TestUtils.waitForCondition(
+        () => body.getBoundingClientRect()[dimension] < bodyBefore - 200,
+        "the mail viewport should follow the window"
+      );
+
+      Assert.less(
+        threadPane.getBoundingClientRect()[dimension],
+        listBefore,
+        "the list should yield space when the reader reaches its minimum"
+      );
+      Assert.lessOrEqual(body.scrollWidth, pane.innerWidth + FUZZ);
+      Assert.lessOrEqual(body.scrollHeight, pane.innerHeight + FUZZ);
+      const bounds = messagePane.getBoundingClientRect();
+      Assert.greater(reader.contentWindow.innerWidth, 0);
+      Assert.lessOrEqual(bounds.right, pane.innerWidth + FUZZ);
+      Assert.lessOrEqual(bounds.bottom, pane.innerHeight + FUZZ);
+      Assert.equal(reader.contentWindow.gMessageURI, messageURI);
+
+      win.resizeTo(wideWidth, wideHeight);
+      await TestUtils.waitForCondition(
+        () =>
+          Math.abs(body.getBoundingClientRect()[dimension] - bodyBefore) <=
+          FUZZ,
+        "the mail viewport should return to its original size"
+      );
+      Assert.lessOrEqual(
+        Math.abs(threadPane.getBoundingClientRect()[dimension] - listBefore),
+        FUZZ,
+        "the original divider position should be restored"
+      );
+    } finally {
+      const closed = BrowserTestUtils.domWindowClosed(win);
+      win.close();
+      await closed;
+      await SpecialPowers.popPrefEnv();
+    }
+  }
+});

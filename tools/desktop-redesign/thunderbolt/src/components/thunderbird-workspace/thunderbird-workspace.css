@@ -1,0 +1,399 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+.thunderbird-panel {
+  --tb-paper: var(--color-card);
+  --tb-ink: var(--color-card-foreground);
+  --tb-muted: var(--color-muted-foreground);
+  --tb-blue: var(--color-primary);
+  --tb-blue-wash: color-mix(in srgb, var(--tb-blue) 8%, var(--tb-paper));
+  --tb-rule: color-mix(in srgb, var(--tb-ink) 14%, var(--tb-paper));
+  --tb-measure: 45rem;
+}
+
+.tb-workspace {
+  --header-inset: 0px;
+  display: flex;
+  inline-size: 100%;
+  min-inline-size: 0;
+  block-size: 100%;
+  color: var(--tb-ink);
+  background: var(--tb-paper);
+}
+
+.tb-navigation {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  flex: 0 0 clamp(13rem, 19vw, 17rem);
+  min-block-size: 0;
+  padding: 1.6rem 1rem 1rem;
+  background: var(--color-sidebar);
+  color: var(--color-sidebar-foreground);
+  border-inline-end: 1px solid var(--tb-rule);
+}
+
+.tb-nav-wordmark {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0.15rem 1.5rem;
+  font-weight: 660;
+  font-size: 1.43rem;
+  letter-spacing: -0.055em;
+}
+
+.tb-bolt {
+  display: inline-block;
+  inline-size: 1.1em;
+  block-size: 1.3em;
+  background: var(--tb-muted);
+  mask: url('../../assets/logo.svg') center / 160% no-repeat;
+}
+
+.tb-workspace button {
+  cursor: pointer;
+}
+.tb-workspace button:disabled {
+  cursor: default;
+}
+.tb-workspace :is(.tb-new-chat, .tb-provider-button, .tb-icon-button),
+.tb-connect-note button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  border-radius: var(--radius-lg);
+  font-weight: 550;
+  min-block-size: max(2.05rem, var(--touch-height-default));
+}
+.tb-workspace :is(.tb-new-chat, .tb-provider-button, .tb-icon-button) svg,
+.tb-connect-note svg,
+.tb-prompts svg {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  stroke-width: 1.65;
+}
+.tb-workspace button:focus-visible,
+.tb-connect-note button:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+.tb-new-chat {
+  color: var(--color-primary-foreground);
+  background: var(--tb-blue);
+  padding-inline: 0.9rem;
+  font-size: 0.88rem;
+}
+
+.tb-new-chat:hover {
+  background: color-mix(in srgb, var(--tb-blue) 91%, var(--tb-ink));
+}
+
+.tb-history {
+  flex: 1;
+  min-block-size: 0;
+  margin-block-start: 1.65rem;
+}
+.tb-history-scroll {
+  block-size: 100%;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.tb-history-scroll [data-sidebar='group'] {
+  padding: 0;
+}
+.tb-empty-history {
+  padding: 0 0.4rem;
+}
+.tb-empty-history h2 {
+  font-size: 0.76rem;
+  font-weight: 650;
+  margin: 0;
+}
+.tb-empty-history p {
+  font-size: 0.82rem;
+  color: var(--tb-muted);
+  margin-block-start: 0.75rem;
+}
+.tb-history-scroll [data-sidebar='menu-button'][data-active='true'] {
+  background: var(--tb-blue-wash);
+  color: var(--tb-blue);
+}
+
+.tb-workspace .tb-provider-button {
+  justify-content: start;
+  color: var(--tb-muted);
+  padding: 0.45rem 0.6rem;
+}
+.tb-navigation .tb-provider-button {
+  border-block-start: 1px solid var(--tb-rule);
+  border-radius: 0;
+  padding-block: 1rem 0.25rem;
+}
+.tb-provider-button:hover,
+.tb-icon-button:hover {
+  color: var(--tb-ink);
+  background: var(--tb-blue-wash);
+}
+
+.tb-workspace-main,
+.tb-chat-page {
+  min-inline-size: 0;
+  min-block-size: 0;
+  flex: 1;
+}
+.tb-workspace-main {
+  display: flex;
+  flex-direction: column;
+}
+.tb-conversation-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3.8rem;
+  padding: 0.55rem clamp(0.75rem, 3vw, 2rem);
+  background: var(--tb-paper);
+  border-block-end: 1px solid var(--tb-rule);
+}
+.tb-conversation-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.94rem;
+  font-weight: 580;
+}
+.tb-icon-button {
+  padding: 0.4rem;
+}
+.tb-chat-page > main {
+  background: var(--tb-paper);
+}
+.tb-chat-page .tb-composer-region {
+  padding: 0.75rem clamp(1rem, 3.5vw, 2.75rem) 1.2rem;
+}
+.tb-chat-page .tb-composer-empty {
+  overflow: auto;
+  align-items: safe center;
+  padding-block: 2rem clamp(2rem, 10vh, 7.5rem);
+}
+.tb-chat-page .tb-composer-column > div {
+  max-inline-size: var(--tb-measure);
+  min-inline-size: 0;
+}
+.tb-greeting {
+  align-self: center;
+  inline-size: 100%;
+  margin-block-end: 1.7rem;
+}
+
+.tb-welcome {
+  text-align: start;
+}
+.tb-welcome-mark {
+  display: block;
+  inline-size: 4.5rem;
+  block-size: 4.5rem;
+  /* Align the printed mark inside the original artwork's transparent canvas. */
+  margin-inline-start: -1.17rem;
+  margin-block-end: 0.75rem;
+}
+.tb-welcome h1 {
+  margin: 0;
+  color: var(--tb-ink);
+  font-family: Georgia, 'Noto Serif', serif;
+  font-size: clamp(2.5rem, 4.65vw, 4.2rem);
+  font-weight: 400;
+  line-height: 1.07;
+  letter-spacing: -0.055em;
+  text-wrap: balance;
+}
+.tb-welcome p {
+  color: var(--tb-muted);
+  font-size: 1.02rem;
+  line-height: 1.52;
+  margin: 0.72rem 0 0;
+}
+.thunderbird-panel .tb-chat-page .composer-surface {
+  background: var(--tb-paper);
+  padding: 0.7rem 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--tb-ink) 25%, var(--tb-paper));
+  border-radius: clamp(0.75rem, var(--radius-xl), 1.1rem);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--tb-ink) 5%, transparent);
+}
+.thunderbird-panel .tb-chat-page .composer-surface:focus-within {
+  border-color: var(--tb-blue);
+  outline: 1px solid var(--tb-blue);
+  outline-offset: 0;
+}
+.tb-chat-page .composer-surface textarea {
+  font-size: 1rem;
+  line-height: 1.5;
+  min-block-size: 3rem;
+}
+.tb-chat-page .tb-composer-empty .composer-surface textarea {
+  min-block-size: 4rem;
+}
+
+.tb-prompts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-block-start: 1.7rem;
+}
+.tb-prompts button {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding-block: 0.65rem;
+  text-align: start;
+  color: var(--tb-ink);
+  border-block-start: 1px solid var(--tb-rule);
+  font-size: 0.82rem;
+  font-weight: 560;
+}
+.tb-prompts button svg:first-child {
+  color: var(--tb-blue);
+}
+.tb-prompts button svg:last-child {
+  margin-inline-start: auto;
+  width: 0.8rem;
+  color: var(--tb-muted);
+}
+.tb-prompts button:hover {
+  color: var(--tb-blue);
+  border-color: var(--tb-blue);
+}
+.tb-connect-note {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--tb-muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  margin-block-start: 0.5rem;
+}
+.tb-connect-note button {
+  color: var(--tb-blue);
+  margin-inline-start: auto;
+  white-space: nowrap;
+  min-block-size: 1.75rem;
+  font-weight: 650;
+  padding-inline: 0.2rem;
+}
+.tb-connect-note button:hover {
+  text-decoration: underline;
+}
+.tb-connect-note > svg {
+  inline-size: 0.85rem;
+}
+.tb-provider-model {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 1rem 0;
+  border-block: 1px solid var(--tb-rule);
+}
+.tb-provider-model > svg {
+  width: 1.5rem;
+  color: var(--tb-blue);
+}
+.tb-provider-model strong,
+.tb-provider-model span {
+  display: block;
+}
+.tb-provider-model span {
+  color: var(--tb-muted);
+  font-size: 0.84rem;
+  margin-block-start: 0.15rem;
+}
+.tb-chat-page .tb-transcript {
+  max-inline-size: calc(var(--tb-measure) + 2rem);
+  min-inline-size: 0;
+  padding-block-start: 1.5rem;
+}
+.tb-history-dialog {
+  max-block-size: min(75vh, 38rem);
+  display: flex;
+  flex-direction: column;
+}
+.tb-history-dialog .tb-history-scroll {
+  min-block-size: 5rem;
+}
+
+@media (max-width: 720px) {
+  .tb-conversation-bar {
+    gap: 0.3rem;
+    min-height: 3.4rem;
+  }
+  .tb-conversation-bar .tb-provider-button span {
+    position: absolute;
+    clip-path: inset(50%);
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+  }
+  .tb-conversation-bar .tb-provider-button {
+    padding-inline: 0.55rem;
+  }
+  .tb-conversation-bar .tb-new-chat {
+    min-block-size: 1.9rem;
+    padding-inline: 0.6rem;
+  }
+  .tb-welcome-mark {
+    inline-size: 3.4rem;
+    block-size: 3.4rem;
+    margin-inline-start: -0.88rem;
+  }
+  .tb-welcome p {
+    font-size: 0.92rem;
+  }
+}
+@media (max-width: 510px) {
+  .tb-prompts {
+    grid-template-columns: 1fr;
+    gap: 0;
+    margin-block-start: 1rem;
+  }
+  .tb-connect-note {
+    flex-wrap: wrap;
+  }
+  .tb-connect-note button {
+    margin-inline-start: 0;
+  }
+  .tb-chat-page .tb-composer-empty {
+    padding-block: 1rem;
+  }
+  .tb-greeting {
+    margin-block-end: 1.15rem;
+  }
+}
+@media (max-height: 600px) {
+  .tb-chat-page .tb-composer-empty {
+    padding-block: 1rem;
+  }
+  .tb-welcome-mark {
+    inline-size: 2.65rem;
+    block-size: 2.65rem;
+    margin-inline-start: -0.69rem;
+    margin-block-end: 0.4rem;
+  }
+  .tb-greeting {
+    margin-block-end: 1rem;
+  }
+}
+@media (forced-colors: active) {
+  .tb-bolt {
+    background: CanvasText;
+    forced-color-adjust: none;
+  }
+  .tb-new-chat,
+  .tb-prompts button {
+    border: 1px solid ButtonBorder;
+  }
+}

@@ -22,6 +22,7 @@ var { ExtensionParent } = ChromeUtils.importESModule(
 );
 
 Preferences.addAll([
+  { id: "mail.compose.inReader", type: "bool" },
   { id: "mail.forward_message_mode", type: "int" },
   { id: "mail.forward_add_extension", type: "bool" },
   { id: "mail.SpellCheckBeforeSend", type: "bool" },

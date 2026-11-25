@@ -64,7 +64,27 @@ async function test_space(background, config = {}) {
       const button = window.document.getElementById(
         `spaces_toolbar_mochi_test-spacesButton-${test.spaceName}`
       );
-      button.click();
+      if (test.action == "newTab") {
+        const menu = document.getElementById("spacesContextMenu");
+        const opened = BrowserTestUtils.waitForEvent(menu, "popupshown");
+        EventUtils.synthesizeMouseAtCenter(button, { type: "contextmenu" });
+        await opened;
+        const newTab = document.getElementById("spacesContextNewTabItem");
+        Assert.ok(
+          BrowserTestUtils.isVisible(newTab),
+          "An open extension space should offer another tab."
+        );
+        Assert.equal(
+          menu.querySelectorAll(".switch-to-tab").length,
+          1,
+          "The menu should list the existing space tab."
+        );
+        const closed = BrowserTestUtils.waitForEvent(menu, "popuphidden");
+        menu.activateItem(newTab);
+        await closed;
+      } else {
+        button.click();
+      }
       await tabPromise;
     }
 
@@ -124,6 +144,12 @@ async function test_space(background, config = {}) {
         `Title of button for space ${name} should be correct.`
       );
 
+      Assert.equal(
+        button.querySelector(".space-label").textContent,
+        title,
+        "The space button should display the current extension title."
+      );
+
       // Check button icon.
       const imgStyles = window.getComputedStyle(button.querySelector("img"));
       Assert.equal(
@@ -164,14 +190,13 @@ async function test_space(background, config = {}) {
         );
       }
 
-      const collapseButton = document.getElementById("collapseButton");
       const revealButton = document.getElementById("spacesToolbarReveal");
       const pinnedButton = document.getElementById("spacesPinnedButton");
       const pinnedPopup = document.getElementById("spacesButtonMenuPopup");
 
       Assert.ok(revealButton.hidden, "The status bar toggle button is hidden");
       Assert.ok(pinnedButton.hidden, "The pinned titlebar button is hidden");
-      collapseButton.click();
+      window.gSpacesToolbar.setPlacement("dropdown");
       Assert.ok(
         !revealButton.hidden,
         "The status bar toggle button is not hidden"

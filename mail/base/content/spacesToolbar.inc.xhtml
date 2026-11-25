@@ -32,7 +32,8 @@
   </menupopup>
 
   <menupopup id="spacesToolbarContextMenu"
-             class="no-icon-menupopup no-accel-menupopup">
+             class="spaces-placement-menu no-accel-menupopup">
+    <menuseparator/>
     <menuitem id="spacesToolbarContextCustomize"
               class="menuitem-iconic"
               data-l10n-id="menuitem-customize-label"
@@ -118,9 +119,12 @@
       <span class="space-label" data-l10n-id="customize-space-tab-settings"></span>
     </button>
 
-    <!-- Collapse button. -->
-    <button id="collapseButton"
-            data-l10n-id="spaces-toolbar-button-hide"
+    <!-- Placement menu. -->
+    <button id="spacesPlacementButton"
+            data-l10n-id="spaces-placement-button"
+            aria-haspopup="menu"
+            aria-controls="spacesToolbarContextMenu"
+            aria-expanded="false"
             class="spaces-toolbar-button"
             tabindex="-1">
       <img src="" alt="" />

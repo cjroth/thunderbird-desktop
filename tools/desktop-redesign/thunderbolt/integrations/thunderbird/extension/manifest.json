@@ -1,0 +1,31 @@
+{
+  "manifest_version": 2,
+  "name": "Thunderbolt",
+  "version": "0.5.1",
+  "description": "A Thunderbolt workspace for your Thunderbird mail, calendars and address books.",
+  "browser_specific_settings": {
+    "gecko": { "id": "thunderbolt-panel@thunderbird.net", "strict_min_version": "163.0a1" }
+  },
+  "icons": { "32": "favicon.svg" },
+  "background": { "scripts": ["background.js"] },
+  "permissions": ["accountsRead", "messagesRead", "addressBooks", "compose", "https://*.tinfoil.sh/*"],
+  "content_security_policy": "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; worker-src 'self' blob:",
+  "experiment_apis": {
+    "thunderboltPanel": {
+      "schema": "experiments/panel/schema.json",
+      "parent": {
+        "scopes": ["addon_parent"],
+        "paths": [["thunderboltPanel"]],
+        "script": "experiments/panel/api.js"
+      }
+    },
+    "thunderboltCalendar": {
+      "schema": "experiments/calendar/schema.json",
+      "parent": {
+        "scopes": ["addon_parent"],
+        "paths": [["thunderboltCalendar"]],
+        "script": "experiments/calendar/api.js"
+      }
+    }
+  }
+}

@@ -659,6 +659,9 @@ var stateListener = {
       }
       loadHTMLMsgPrefs();
     }
+    if (document.documentElement.hasAttribute("data-reader-compose")) {
+      initializeReaderStationery();
+    }
     AdjustFocus();
   },
 
@@ -813,7 +816,7 @@ var stateListener = {
         if (gMsgCompose) {
           gMsgCompose.onSendNotPerformed(null, Cr.NS_ERROR_ABORT);
         }
-        window.close();
+        closeComposeSurface();
       }
     } else if (gAutoSaving) {
       // If we failed to save, and we're autosaving, need to re-mark the editor
@@ -1125,7 +1128,7 @@ var defaultController = {
       },
       doCommand() {
         if (ComposeCanClose()) {
-          window.close();
+          closeComposeSurface();
         }
       },
     },
@@ -5519,21 +5522,33 @@ async function ComposeLoad() {
 
   BondOpenPGP.init();
 
-  // Give the message header a minimum height based on its current height,
-  // before more recipient rows are revealed in #extraAddressRowsArea. This
-  // ensures that the area cannot be shrunk below its current height by the
-  // #headersSplitter.
-  // NOTE: At this stage, we only expect the "To" row to be visible within the
-  // recipients container.
-  const messageHeader = document.getElementById("MsgHeadersToolbar");
-  const recipientsContainer = document.getElementById("recipientsContainer");
-  // In the unlikely situation where the recipients container is already
-  // overflowing, we make sure to increase the minHeight by the overflow.
-  const headerHeight =
-    messageHeader.clientHeight +
-    recipientsContainer.scrollHeight -
-    recipientsContainer.clientHeight;
-  messageHeader.style.minHeight = `${headerHeight}px`;
+  if (document.documentElement.hasAttribute("data-reader-compose")) {
+    const toolbox = document.getElementById("compose-toolbox");
+    document.body.moveBefore(
+      toolbox,
+      document.getElementById("composeContentBox").nextElementSibling
+    );
+    toolbox.insertBefore(
+      document.getElementById("composeFormattingButton"),
+      document.getElementById("composeToolbar2")
+    );
+  } else {
+    // Give the message header a minimum height based on its current height,
+    // before more recipient rows are revealed in #extraAddressRowsArea. This
+    // ensures that the area cannot be shrunk below its current height by the
+    // #headersSplitter.
+    // NOTE: At this stage, we only expect the "To" row to be visible within the
+    // recipients container.
+    const messageHeader = document.getElementById("MsgHeadersToolbar");
+    const recipientsContainer = document.getElementById("recipientsContainer");
+    // In the unlikely situation where the recipients container is already
+    // overflowing, we make sure to increase the minHeight by the overflow.
+    const headerHeight =
+      messageHeader.clientHeight +
+      recipientsContainer.scrollHeight -
+      recipientsContainer.clientHeight;
+    messageHeader.style.minHeight = `${headerHeight}px`;
+  }
 
   // Setup the attachment bucket.
   gAttachmentBucket = document.getElementById("attachmentBucket");
@@ -5625,7 +5640,7 @@ async function ComposeLoad() {
     ]);
     Services.prompt.alert(window, title, message);
 
-    window.close();
+    closeComposeSurface();
     return;
   }
 
@@ -5896,7 +5911,9 @@ function ComposeUnload() {
     }
   }
 
-  window.close();
+  if (!document.documentElement.hasAttribute("data-reader-compose")) {
+    window.close();
+  }
 }
 
 function onEncryptionChoice(value) {
@@ -6662,7 +6679,7 @@ async function CompleteGenericSendMessage(msgType) {
   ) {
     // We keep the compose window open so the recovery dialog can be shown if copying fails.
     await progressListener.waitForStop();
-    window.close();
+    closeComposeSurface();
   }
 }
 
@@ -7985,6 +8002,70 @@ function AdjustFocus() {
 }
 
 /**
+ * Apply the reader palette through an editor-only stylesheet. The message
+ * keeps its own authored colors and the stylesheet is never serialized.
+ */
+function initializeReaderStationery() {
+  const editor = GetCurrentEditor();
+  const doc = editor.document;
+  const theme = getComputedStyle(document.documentElement);
+  const sheet = new doc.defaultView.CSSStyleSheet();
+  sheet.replaceSync(`
+    :root { color-scheme: light dark; }
+    body { margin: 0; padding: 6px 0; }
+    body > p:first-child { margin-block-start: 0; }
+    @media (prefers-contrast: no-preference) {
+      body:not([bgcolor]) { background-color: ${theme.getPropertyValue("--desk-surface")}; }
+      body:not([text]) { color: ${theme.getPropertyValue("--desk-ink")}; }
+      body { caret-color: ${theme.getPropertyValue("--desk-accent")}; }
+    }
+  `);
+  doc.adoptedStyleSheets.push(sheet);
+  if (document.documentElement.dataset.readerCompose != "reply") {
+    return;
+  }
+
+  if (!document.getElementById("msgSubject").value) {
+    document.getElementById("readerComposeDetails").ariaExpanded = "true";
+  }
+
+  const prompt = document.getElementById("readerReplyPrompt");
+  const refreshPrompt = () => {
+    prompt.hidden =
+      !!doc.body.innerText.trim() ||
+      Array.from(doc.body.querySelectorAll("img, table, hr")).some(
+        element => element.getClientRects().length
+      );
+  };
+  // The native editor can also change the document through undo, paste,
+  // identity signatures and attachment commands.
+  const observer = new MutationObserver(refreshPrompt);
+  observer.observe(doc.body, { childList: true, characterData: true, subtree: true });
+
+  const citation = ':is(blockquote[type="cite"], span[_moz_quote])';
+  const original = `body > .moz-cite-prefix + ${citation}`;
+  const quote = doc.querySelector(original);
+  if (quote && editor.selection.isCollapsed &&
+      !quote.contains(editor.selection.anchorNode)) {
+    const folding = new doc.defaultView.CSSStyleSheet();
+    folding.replaceSync(`
+      body > .moz-cite-prefix:has(+ ${citation}), ${original} {
+        display: none !important;
+      }
+    `);
+    doc.adoptedStyleSheets.push(folding);
+    const button = document.getElementById("readerComposeQuote");
+    button.hidden = false;
+    button.addEventListener("click", () => {
+      folding.disabled = !folding.disabled;
+      button.ariaExpanded = String(folding.disabled);
+      refreshPrompt();
+    });
+  }
+  refreshPrompt();
+}
+
+/**
  * Set the compose window title with flavors (Write | Print Preview).
  */
 function SetComposeWindowTitle() {
@@ -8000,6 +8081,14 @@ function SetComposeWindowTitle() {
   document.title = newTitle;
   if (AppConstants.platform == "macosx") {
     document.getElementById("titlebar-title-label").value = newTitle;
+  }
+}
+
+function closeComposeSurface() {
+  if (document.documentElement.hasAttribute("data-reader-compose")) {
+    window.dispatchEvent(new Event("reader-compose-finished"));
+  } else {
+    window.close();
   }
 }
 

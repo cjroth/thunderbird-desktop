@@ -11,6 +11,7 @@ const viewMenuData = {
   menu_Toolbars: {},
   view_toolbars_popup_quickFilterBar: { checked: true },
   viewToolbarsPopupSpacesToolbar: { checked: true },
+  viewSpacesLayout: {},
   menu_showTaskbar: { checked: true },
   customizeMailToolbars: {},
   menu_MessagePaneLayout: {},

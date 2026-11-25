@@ -32,7 +32,7 @@ registerCleanupFunction(async () => {
   const tabmail = document.getElementById("tabmail");
   tabmail.closeOtherTabs(tabmail.tabInfo[0]);
   // Reset the spaces toolbar to its default visible state.
-  window.gSpacesToolbar.toggleToolbar(false);
+  Services.prefs.clearUserPref("mail.spacesToolbar.placement");
   // Reset the menubar visibility.
   const menubar = document.getElementById("toolbar-menubar");
   menubar.removeAttribute("autohide");
@@ -263,6 +263,154 @@ async function sub_test_cycle_through_primary_tabs() {
   window.tabmail.closeOtherTabs(window.tabmail.tabInfo[0]);
 }
 
+add_task(async function testSpacesPlacementChoices() {
+  const toolbar = document.getElementById("spacesToolbar");
+  const tabmail = document.getElementById("tabmail");
+  const tab = tabmail.currentTabInfo;
+  const viewMenu = document.querySelector("#viewSpacesLayout > menupopup");
+  Assert.equal(viewMenu.querySelectorAll("[data-placement]").length, 3);
+  viewMenu.querySelector('[data-placement="left"]').doCommand();
+  Assert.equal(gSpacesToolbar.placement, "left");
+  const options = document.getElementById("spacesToolbarContextMenu");
+  const pinned = document.getElementById("spacesPinnedButton");
+  for (const placement of ["left", "dropdown", "top"]) {
+    const shown = BrowserTestUtils.waitForPopupEvent(options, "shown");
+    options.openPopup(document.getElementById("button-appmenu"), "after_start");
+    await shown;
+    Assert.equal(
+      options.querySelector('[checked="true"]').dataset.placement,
+      gSpacesToolbar.placement
+    );
+    const hidden = BrowserTestUtils.waitForPopupEvent(options, "hidden");
+    options.activateItem(options.querySelector(`[data-placement="${placement}"]`));
+    await hidden;
+    Assert.equal(Services.prefs.getStringPref(gSpacesToolbar.placementPref), placement);
+    Assert.equal(toolbar.hidden, placement == "dropdown");
+    Assert.equal(pinned.hidden, placement != "dropdown");
+    Assert.equal(toolbar.getAttribute("aria-orientation"), placement == "left" ? "vertical" : "horizontal");
+    Assert.equal(tabmail.currentTabInfo, tab, "The active document survives placement changes");
+  }
+});
+
+add_task(async function test_spacesRailBelowWindowHeader() {
+  const tabmail = document.getElementById("tabmail");
+  const strip = document.getElementById("tabs-toolbar");
+  const toolbar = document.getElementById("spacesToolbar");
+  const header = document.querySelector("unified-toolbar");
+  const menubar = document.getElementById("toolbar-menubar");
+  const status = document.getElementById("status-bar");
+  const controls = header.querySelector(".titlebar-buttonbox");
+  const bounds = document.body.getBoundingClientRect();
+  const controlsLeft = controls.getBoundingClientRect().left;
+
+  // Gecko can return fractional CSS-pixel edges at non-default display scales.
+  function assertSameEdge(actual, expected, message) {
+    Assert.equal(
+      Math.round(actual * window.devicePixelRatio),
+      Math.round(expected * window.devicePixelRatio),
+      message
+    );
+  }
+
+  function assertRailGeometry() {
+    const rail = toolbar.getBoundingClientRect();
+    assertSameEdge(
+      rail.left,
+      bounds.left,
+      "The rail starts at the window edge"
+    );
+    const headerRect = header.getBoundingClientRect();
+    const headerBottom = BrowserTestUtils.isVisible(menubar)
+      ? Math.max(headerRect.bottom, menubar.getBoundingClientRect().bottom)
+      : headerRect.bottom;
+    assertSameEdge(rail.top, headerBottom, "The rail starts below the header");
+    assertSameEdge(
+      headerRect.left,
+      bounds.left,
+      "The header keeps its left edge"
+    );
+    assertSameEdge(
+      headerRect.right,
+      bounds.right,
+      "The header stays full width"
+    );
+    assertSameEdge(
+      rail.bottom,
+      bounds.bottom,
+      "The rail reaches the window bottom"
+    );
+    Assert.greater(rail.width, 0, "The rail occupies a column");
+    for (const element of [tabmail, status]) {
+      assertSameEdge(
+        element.getBoundingClientRect().left,
+        rail.right,
+        `${element.id} starts at the inside edge of the rail`
+      );
+    }
+    if (!strip.collapsed) {
+      const stripRect = strip.getBoundingClientRect();
+      assertSameEdge(
+        stripRect.top,
+        rail.top,
+        "Tabs and Spaces share a top edge"
+      );
+      assertSameEdge(stripRect.left, rail.right, "Tabs start after the rail");
+      const firstSpace = document
+        .getElementById("mailButton")
+        .getBoundingClientRect();
+      const tabFace = strip
+        .querySelector(".tabmail-tab[selected] .tab-background")
+        .getBoundingClientRect();
+      assertSameEdge(
+        firstSpace.top,
+        tabFace.top,
+        "Spaces and tabs share a visible top edge"
+      );
+      assertSameEdge(
+        firstSpace.left - rail.left,
+        tabFace.top - stripRect.top,
+        "The rail and tab strip have matching insets"
+      );
+    }
+    if (BrowserTestUtils.isVisible(controls)) {
+      assertSameEdge(
+        controls.getBoundingClientRect().left,
+        controlsLeft,
+        "The native window buttons keep their usual position"
+      );
+    }
+  }
+
+  await SpecialPowers.pushPrefEnv({ set: [["mail.tabs.autoHide", true]] });
+  let secondTab;
+  try {
+    gSpacesToolbar.setPlacement("left");
+    Assert.ok(strip.collapsed, "The initial mail tab needs no document strip");
+    assertRailGeometry();
+
+    secondTab = tabmail.openTab("mail3PaneTab", { folderURI: folderA.URI });
+    Assert.ok(!strip.collapsed, "A second mail tab shows the document strip");
+    assertRailGeometry();
+
+    for (const placement of ["dropdown", "top"]) {
+      gSpacesToolbar.setPlacement(placement);
+      for (const element of [strip, tabmail, status]) {
+        assertSameEdge(
+          element.getBoundingClientRect().left,
+          bounds.left,
+          `${placement} restores the full width of ${element.id}`
+        );
+      }
+    }
+  } finally {
+    if (secondTab) {
+      tabmail.closeTab(secondTab);
+    }
+    gSpacesToolbar.setPlacement("top");
+    await SpecialPowers.popPrefEnv();
+  }
+});
+
 add_task(async function testSpacesToolbarVisibility() {
   const spacesToolbar = document.getElementById("spacesToolbar");
   const toggleButton = document.getElementById("spacesToolbarReveal");
@@ -341,24 +489,33 @@ add_task(async function testSpacesToolbarVisibility() {
 
   // Collapse with a mouse click.
   let activeElement = document.activeElement;
-  const collapseButton = document.getElementById("collapseButton");
-  EventUtils.synthesizeMouseAtCenter(collapseButton, {}, window);
-  await assertVisibility(false, "after clicking collapse button");
+  const spacesPlacementButton = document.getElementById("spacesPlacementButton");
+  const menu = document.getElementById("spacesToolbarContextMenu");
+  async function chooseDropdown(activateMenu) {
+    const shown = BrowserTestUtils.waitForPopupEvent(menu, "shown");
+    activateMenu();
+    await shown;
+    menu.activateItem(menu.querySelector('[data-placement="dropdown"]'));
+  }
+  await chooseDropdown(() =>
+    EventUtils.synthesizeMouseAtCenter(spacesPlacementButton, {}, window)
+  );
+  await assertVisibility(false, "after choosing Dropdown");
 
   await toggleVisibilityWithAppMenu(false);
   await assertVisibility(true, "after revealing with the app menu");
 
   // We already clicked the collapse button, so it should already be the
   // focusButton for the gSpacesToolbar, and thus focusable.
-  collapseButton.focus();
+  spacesPlacementButton.focus();
   Assert.ok(
-    collapseButton.matches(":focus"),
+    spacesPlacementButton.matches(":focus"),
     "Collapse button should be focusable"
   );
 
   // Hide the spaces toolbar using the collapse button, which already has focus.
-  EventUtils.synthesizeKey(" ", {}, window);
-  await assertVisibility(false, "after closing with space key press");
+  await chooseDropdown(() => EventUtils.synthesizeKey(" ", {}, window));
+  await assertVisibility(false, "after choosing Dropdown from the keyboard");
   Assert.ok(
     pinnedButton.matches(":focus"),
     "Pinned button should be focused after closing with a key press"
@@ -376,7 +533,7 @@ add_task(async function testSpacesToolbarVisibility() {
 
   await assertVisibility(true, "after opening with pinned menu");
   Assert.ok(
-    collapseButton.matches(":focus"),
+    spacesPlacementButton.matches(":focus"),
     "Collapse button should be focused again after showing with the pinned menu"
   );
 
@@ -920,11 +1077,7 @@ add_task(async function testSpacesToolbarMenubar() {
   document.getElementById("toolbar-menubar").removeAttribute("autohide");
   const spacesToolbar = document.getElementById("spacesToolbar");
 
-  EventUtils.synthesizeMouseAtCenter(
-    document.getElementById("collapseButton"),
-    {},
-    window
-  );
+  gSpacesToolbar.setPlacement("dropdown");
   Assert.ok(spacesToolbar.hidden, "The spaces toolbar is hidden");
   Assert.ok(
     !document.getElementById("spacesToolbarReveal").hidden,
@@ -1103,6 +1256,27 @@ add_task(async function testSpacesToolbarExtension() {
     "spacesToolbarAddonsOverflowButton"
   );
 
+  // The rail must reflow when the user changes density at a fixed window size.
+  const toolbar = document.getElementById("spacesToolbar");
+  toolbar.style.height = "455px";
+  await SpecialPowers.pushPrefEnv({
+    set: [["mail.uidensity", 0], [gSpacesToolbar.placementPref, "left"]],
+  });
+  try {
+    const visibleAddons = ".spaces-addon-button:not([hidden])";
+    const compactCount = toolbar.querySelectorAll(visibleAddons).length;
+    Services.prefs.setIntPref("mail.uidensity", 2);
+    Assert.less(
+      toolbar.querySelectorAll(visibleAddons).length,
+      compactCount,
+      "Larger buttons move more spaces into overflow"
+    );
+    Assert.equal(toolbar.scrollHeight, toolbar.clientHeight, "All visible buttons fit");
+  } finally {
+    toolbar.style.removeProperty("height");
+    await SpecialPowers.popPrefEnv();
+  }
+
   const originalWidth = window.outerWidth;
   window.resizeTo(780, window.outerHeight);
   await new Promise(resolve => requestAnimationFrame(resolve));
@@ -1246,7 +1420,7 @@ add_task(async function testSpacesToolbarFocusRing() {
   EventUtils.synthesizeKey("KEY_End", {}, window);
   Assert.equal(
     document.activeElement.id,
-    "collapseButton",
+    "spacesPlacementButton",
     "The last button is focused"
   );
 

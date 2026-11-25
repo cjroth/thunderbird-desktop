@@ -29,6 +29,7 @@ add_setup(async function () {
     createMessages(folder, {
       count: 1,
       from,
+      subject: "Reader toolbar position",
       to: [["Recipient", "sender@nul.invalid"]],
     });
   }
@@ -71,8 +72,7 @@ add_task(async function test_deletePositionWhenSenderWraps() {
   await initialLoad;
   const toolbar = view.document.getElementById("header-view-toolbox");
   const sender = view.document.getElementById("expandedfromRow");
-  // Leave room for the short sender, but make the longer sender wrap.
-  await setMessageWidth(Math.ceil(toolbar.getBoundingClientRect().width) + 200);
+  await setMessageWidth(720);
   Assert.lessOrEqual(
     sender.getBoundingClientRect().right,
     toolbar.getBoundingClientRect().left,
@@ -90,13 +90,11 @@ add_task(async function test_deletePositionWhenSenderWraps() {
     const loaded = BrowserTestUtils.waitForEvent(view, "MsgLoaded");
     view.displayMessage(message.folder.getUriForMsg(message));
     await loaded;
-    if (message.messageKey == messages[1].messageKey) {
-      Assert.greaterOrEqual(
-        sender.getBoundingClientRect().top,
-        toolbar.getBoundingClientRect().bottom,
-        "The longer sender should wrap below the toolbar"
-      );
-    }
+    Assert.lessOrEqual(
+      sender.getBoundingClientRect().right,
+      toolbar.getBoundingClientRect().left,
+      "Sender details and message actions should occupy separate columns"
+    );
     const bounds = button.getBoundingClientRect();
     for (const edge of ["left", "top", "width", "height"]) {
       Assert.lessOrEqual(
@@ -112,6 +110,17 @@ add_task(async function test_deletePositionWhenSenderWraps() {
       "The original Delete click point should still hit Delete after switching senders"
     );
   }
+  await setMessageWidth(420);
+  Assert.greaterOrEqual(
+    toolbar.getBoundingClientRect().top,
+    view.document.getElementById("expandedtoRow").getBoundingClientRect().bottom,
+    "The toolbar should have its own row below the recipients in a narrow pane"
+  );
+  Assert.lessOrEqual(
+    toolbar.getBoundingClientRect().right,
+    view.innerWidth,
+    "The toolbar should remain inside the reading pane"
+  );
 });
 
 add_task(async function test_touchButtonSizing() {
@@ -126,6 +135,12 @@ add_task(async function test_touchButtonSizing() {
   );
 
   header.classList.remove("message-header-buttons-only-icons");
+  // Exercise enlarged text with the icon-and-label toolbar setting.
+  const adaptive = header.classList.contains("message-header-buttons-adaptive");
+  registerCleanupFunction(() => {
+    header.classList.toggle("message-header-buttons-adaptive", adaptive);
+  });
+  header.classList.remove("message-header-buttons-adaptive");
   view.document.documentElement.style.fontSize = "30px";
   const bounds = button.getBoundingClientRect();
   const label = button.querySelector(".toolbarbutton-text");

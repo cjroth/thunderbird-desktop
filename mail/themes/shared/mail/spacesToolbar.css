@@ -16,6 +16,8 @@
   --spaces-button-badge-bg-color: var(--color-red-70);
   --spaces-icon-size: 17px;
   --spaces-cell-height: max(2.45rem, 34px);
+  --spaces-rail-border-width: 1px;
+  --spaces-rail-width: calc(var(--spaces-cell-height) + 2 * var(--navigation-gutter) + var(--spaces-rail-border-width));
   --spaces-pinned-button-margin: 4px;
   --spaces-button-badge-padding: 1px 4px;
   --spaces-button-badge-font: 0.75rem;
@@ -212,12 +214,64 @@
 }
 
 #spacesPinnedButton {
-  margin-inline-start: var(--spaces-pinned-button-margin);
-  list-style-image: var(--icon-spaces-menu);
+  -moz-window-dragging: no-drag;
+  flex: none;
+  align-items: center;
+  gap: 6px;
   min-inline-size: auto;
+  block-size: var(--spaces-cell-height);
+  margin-inline: var(--spaces-pinned-button-margin) 3px;
+  padding-inline: 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--spaces-button-text-color);
+  font: 550 0.91rem/1 var(--desk-font);
+  list-style-image: var(--icon-spaces-menu);
+
+  & .toolbarbutton-icon {
+    inline-size: var(--spaces-icon-size);
+    block-size: var(--spaces-icon-size);
+  }
 
   & .toolbarbutton-text {
-    display: none;
+    display: flex;
+    flex: none;
+    margin: 0;
+  }
+
+  &::after {
+    content: "";
+    background: var(--icon-nav-down-xs) center / contain no-repeat;
+    -moz-context-properties: fill, stroke;
+    fill: currentColor;
+    stroke: currentColor;
+    inline-size: 8px;
+    block-size: 8px;
+  }
+
+  &:hover {
+    color: var(--desk-ink);
+    background-color: color-mix(in srgb, currentColor 8%, transparent);
+  }
+
+  &[open="true"] {
+    color: var(--spaces-button-active-text-color);
+    background-color: var(--spaces-button-active-bg-color);
+  }
+
+  &:focus-visible {
+    outline: var(--focus-outline);
+    outline-offset: 1px;
+  }
+
+  @media (max-width: 700px) {
+    gap: 4px;
+    padding-inline: 5px;
+
+    & .toolbarbutton-text {
+      display: none;
+    }
   }
 }
 
@@ -246,8 +300,8 @@ img {
     content: var(--spaces-icon-settings);
   }
 
-  #collapseButton & {
-    content: var(--spaces-icon-collapse);
+  #spacesPlacementButton & {
+    content: var(--icon-layout);
   }
 
   #spacesToolbarAddonsOverflowButton & {
@@ -293,18 +347,71 @@ img {
   stroke-opacity: 0;
 }
 
-#collapseButton img {
-  transform: rotate(90deg);
-}
-
 #spacesToolbarReveal img,
 #spacesPopupButtonReveal image {
   transform: rotate(-90deg);
 }
 
-@media (hover: hover) and (prefers-contrast: no-preference) {
-  #spacesToolbar:not(:hover, :focus-within) #collapseButton {
-    opacity: 0;
+:root[spaces-placement="left"] {
+  & #navigation-toolbox {
+    anchor-name: --spaces-toolbox;
+  }
+
+  & #tabs-toolbar:not([collapsed]) {
+    anchor-name: --spaces-tabs;
+  }
+
+  &:not(.customizingUnifiedToolbar) :is(#tabs-toolbar, #messengerBody) {
+    /* Left is a physical placement even when the UI uses RTL. */
+    /* stylelint-disable-next-line csstools/use-logical */
+    margin-left: var(--spaces-rail-width);
+  }
+}
+
+:root[spaces-placement="left"] body > #spacesToolbar:not([hidden]) {
+  position: fixed;
+  /* When the tabs collapse, the toolbox ends at the foot of the header. */
+  inset-block-start: anchor(--spaces-tabs top, anchor(--spaces-toolbox bottom));
+  inset-block-end: 0;
+  /* stylelint-disable-next-line csstools/use-logical */
+  left: 0;
+  z-index: 2;
+  flex-direction: column;
+  box-sizing: border-box;
+  inline-size: var(--spaces-rail-width);
+  min-block-size: 0;
+  margin: 0;
+  padding: var(--navigation-gutter);
+  gap: 4px;
+  /* stylelint-disable-next-line csstools/use-logical */
+  border-right: var(--spaces-rail-border-width) solid var(--desk-line);
+  border-radius: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+
+  & .spaces-toolbar-container {
+    flex: none;
+    flex-direction: column;
+  }
+
+  & .spaces-toolbar-bottom-container {
+    margin: auto 0 0;
+    padding: 4px 0 0;
+    border-inline: 0;
+    border-block-start: 1px solid var(--desk-line);
+  }
+
+  & #spacesToolbarAddonsContainer {
+    margin: 0;
+  }
+
+  & .spaces-toolbar-button {
+    inline-size: var(--spaces-cell-height);
+    padding: 0;
+  }
+
+  & .space-label {
+    display: none;
   }
 }
 

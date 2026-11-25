@@ -4731,14 +4731,68 @@ var threadPane = {
         }
         this.scrollDetected = true;
         break;
-      case "showplaceholder":
+      case "showplaceholder": {
+        const label = document.querySelector("#placeholderNoMessages > span");
+        const id = this.getEmptyInboxMessageId();
+        if (id) {
+          if (
+            label.dataset.l10nId != id ||
+            !threadTree.placeholder.classList.contains("show")
+          ) {
+            document.l10n.setAttributes(label, id, {
+              line: Math.floor(Math.random() * 8),
+            });
+          }
+        } else if (
+          label.dataset.l10nId != "message-list-placeholder-no-messages"
+        ) {
+          document.l10n.setAttributes(
+            label,
+            "message-list-placeholder-no-messages"
+          );
+        }
         threadTree.updatePlaceholders([
           folderTree.selection.size > 1
             ? "placeholderMultipleFolders"
             : "placeholderNoMessages",
         ]);
         break;
+      }
     }
+  },
+
+  /**
+   * @returns {?string} Empty-state Fluent ID for a cleared Inbox or one of
+   *   its status tabs. Other folders and additional filters use generic copy.
+   */
+  getEmptyInboxMessageId() {
+    if (
+      folderTree.selection.size != 1 ||
+      !gFolder?.isSpecialFolder(Ci.nsMsgFolderFlags.Inbox, false)
+    ) {
+      return null;
+    }
+
+    const { unread, starred, text, tags, addrBook, attachment } =
+      quickFilterBar.filterer.filterValues;
+    if (text?.text || tags != null || addrBook != null || attachment != null) {
+      return null;
+    }
+    if (unread === true && starred == null) {
+      return "message-list-placeholder-inbox-unread";
+    }
+    if (starred === true && unread == null) {
+      return "message-list-placeholder-inbox-starred";
+    }
+    if (
+      unread == null &&
+      starred == null &&
+      gFolder.getTotalMessages(false) == 0 &&
+      !gViewWrapper?.search?.hasSearchTerms
+    ) {
+      return "message-list-placeholder-inbox-zero";
+    }
+    return null;
   },
 
   observe(subject, topic, data) {

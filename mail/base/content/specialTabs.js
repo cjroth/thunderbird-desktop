@@ -4,6 +4,7 @@
 
 /* global MozElements, openPreferencesTab */
 
+/* import-globals-from spacesToolbar.js */
 /* import-globals-from utilityOverlay.js */
 
 /* globals ZoomManager */ // From viewZoomOverlay.js
@@ -108,14 +109,7 @@ tabProgressListener.prototype = {
       }
 
       var location = aLocationURI ? aLocationURI.spec : "";
-      if (aLocationURI && !aLocationURI.schemeIs("about")) {
-        this.mTab.backButton.disabled = !this.mBrowser.canGoBack;
-        this.mTab.forwardButton.disabled = !this.mBrowser.canGoForward;
-        this.mTab.urlbar.value = location;
-        this.mTab.root.setAttribute("tabtoolbar", "true");
-      } else {
-        this.mTab.root.setAttribute("tabtoolbar", "false");
-      }
+      this.updateNavigationToolbar(aLocationURI);
 
       // Although we're unlikely to be loading about:blank, we'll check it
       // anyway just in case. The second condition is for new tabs, otherwise
@@ -125,6 +119,23 @@ tabProgressListener.prototype = {
         location == ""
       );
     }
+  },
+  /**
+   * Show navigation and origin when a content tab leaves its own space.
+   *
+   * @param {nsIURI?} uri - The current top-level location.
+   */
+  updateNavigationToolbar(uri) {
+    const show =
+      uri &&
+      !uri.schemeIs("about") &&
+      !gSpacesToolbar.isExtensionSpacePage(this.mTab, uri);
+    if (show) {
+      this.mTab.backButton.disabled = !this.mBrowser.canGoBack;
+      this.mTab.forwardButton.disabled = !this.mBrowser.canGoForward;
+      this.mTab.urlbar.value = uri.spec;
+    }
+    this.mTab.root.setAttribute("tabtoolbar", show ? "true" : "false");
   },
   onStateChange(aWebProgress, aRequest, aStateFlags, aStatus) {
     if (this.mProgressListener) {
@@ -790,6 +801,8 @@ var specialTabs = {
         throw new Error("url must be specified");
       }
 
+      // Keep separate space tabs independent when their routes share a document.
+      aTab.duplicate = aArgs.duplicate;
       // First clone the page and set up the basics.
       const clone = document
         .getElementById("contentTab")
@@ -1014,6 +1027,7 @@ var specialTabs = {
 
       return {
         tabURI: aTab.browser.currentURI.spec,
+        duplicate: aTab.duplicate,
         linkHandler: aTab.browser.getAttribute("messagemanagergroup"),
         userContextId: `${
           aTab.browser.getAttribute("usercontextid") ||
@@ -1025,8 +1039,15 @@ var specialTabs = {
       if (!this._canRestoreURL(aPersistedState.tabURI)) {
         return;
       }
+      // Resolve the live group on every launch. A restored extension document
+      // needs to share its add-on's group to initialize its extension APIs.
+      const uri = Services.io.newURI(aPersistedState.tabURI);
+      const policy = uri.schemeIs("moz-extension")
+        ? WebExtensionPolicy.getByHostname(uri.host)
+        : null;
       const tab = aTabmail.openTab("contentTab", {
         background: true,
+        initialBrowsingContextGroupId: policy?.browsingContextGroupId,
         duplicate: aPersistedState.duplicate,
         linkHandler: aPersistedState.linkHandler,
         url: aPersistedState.tabURI,

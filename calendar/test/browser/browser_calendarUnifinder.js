@@ -93,11 +93,13 @@ add_task(async function testOpenEvent() {
 
   const tree = document.querySelector("#unifinder-search-results-tree");
   Assert.equal(tree.view.rowCount, 0, "should have cleared unifinder");
+  const emptyHeight = unifinderBox.getBoundingClientRect().height;
 
   for (const event of [noRepeatEvent, repeatEvent]) {
     await calendar.addItem(event);
   }
   Assert.equal(tree.view.rowCount, 8, "should have 8 events showing");
+  const fullHeight = unifinderBox.getBoundingClientRect().height;
 
   const searchBox = document.getElementById("unifinder-search-field");
   searchBox.focus();
@@ -107,6 +109,13 @@ add_task(async function testOpenEvent() {
   await TestUtils.waitForCondition(
     () => tree.view.rowCount == 1,
     "Waiting for unifinder tree to filter itself; rowCount=" + tree.view.rowCount
+  );
+  const singleHeight = unifinderBox.getBoundingClientRect().height;
+  Assert.less(singleHeight, fullHeight, "Filtering returns space to the calendar");
+  Assert.lessOrEqual(
+    Math.abs(singleHeight - emptyHeight - tree.rowHeight),
+    1,
+    "One result adds exactly one native row below the column headers"
   );
 
   for (const event of [noRepeatEvent, repeatEvent]) {

@@ -642,6 +642,8 @@ pref("dom.disable_window_status_change",          true);
 pref("mail.openMessageBehavior", 2);
 // If messages or folders are opened using the context menu or a middle click,
 // we open them in the background.
+pref("mail.spacesToolbar.placement", "top");
+
 pref("mail.tabs.loadInBackground", false);
 
 // Tabs
@@ -1648,3 +1650,5 @@ pref("widget.macos.native-anchored-menus", false);
 
 // The color used to style primary buttons and elements.
 pref("mail.appearance.accentColor", "thunderbird");
+
+pref("mail.compose.inReader", true);

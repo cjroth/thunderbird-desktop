@@ -236,3 +236,24 @@
     --desk-accent-soft: Canvas;
   }
 }
+
+/* Stable correspondent colors shared by the message list and reader. */
+:is(.sender-monogram, .recipient-avatar)[data-tone] {
+  --avatar-tint: light-dark(#4056a1, #b6c4f2);
+
+  &[data-tone="1"] {
+    --avatar-tint: light-dark(#705482, #ceb7de);
+  }
+  &[data-tone="2"] {
+    --avatar-tint: light-dark(#406a81, #a4c8db);
+  }
+  &[data-tone="3"] {
+    --avatar-tint: light-dark(#8a5d3e, #e3b38e);
+  }
+  &[data-tone="4"] {
+    --avatar-tint: light-dark(#87555d, #e0adb5);
+  }
+  &[data-tone="5"] {
+    --avatar-tint: light-dark(#626d39, #cbd69c);
+  }
+}

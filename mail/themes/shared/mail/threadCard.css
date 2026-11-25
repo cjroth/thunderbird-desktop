@@ -773,25 +773,8 @@
     }
 
     & .card-layout td .card-container .sender-monogram {
-      --avatar-tint: light-dark(#4056a1, #b6c4f2);
       color: var(--avatar-tint);
       background-color: color-mix(in srgb, var(--avatar-tint) 13%, var(--desk-surface));
-
-      &[data-tone="1"] {
-        --avatar-tint: light-dark(#705482, #ceb7de);
-      }
-      &[data-tone="2"] {
-        --avatar-tint: light-dark(#406a81, #a4c8db);
-      }
-      &[data-tone="3"] {
-        --avatar-tint: light-dark(#8a5d3e, #e3b38e);
-      }
-      &[data-tone="4"] {
-        --avatar-tint: light-dark(#87555d, #e0adb5);
-      }
-      &[data-tone="5"] {
-        --avatar-tint: light-dark(#626d39, #cbd69c);
-      }
     }
   }
 }

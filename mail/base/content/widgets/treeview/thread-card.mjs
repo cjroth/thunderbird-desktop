@@ -6,6 +6,10 @@ import { TreeViewTableRow } from "chrome://messenger/content/tree-view.mjs";
 // eslint-disable-next-line import-x/no-unassigned-import
 import "chrome://messenger/content/thread-card-tags.mjs";
 
+const { DisplayNameUtils } = ChromeUtils.importESModule(
+  "resource:///modules/DisplayNameUtils.sys.mjs"
+);
+
 /**
  * The tr element row of the TreeView table for the cards view layout.
  * NOTE: The main child is a clone of the `#threadPaneCardTemplate` template.
@@ -265,15 +269,8 @@ class ThreadCard extends TreeViewTableRow {
    * @param {string} correspondent - The localized correspondent column value.
    */
   #updateMonogram(correspondent) {
-    const name = correspondent.split(/[<@,]/u, 1)[0].normalize();
-    const words = name.match(/[\p{L}\p{N}][\p{L}\p{N}\p{M}]*/gu) || [];
-    const first = words[0]?.match(/^.\p{M}*/u)[0] || "";
-    const last = words.length > 1 ? words.at(-1).match(/^.\p{M}*/u)[0] : "";
-    this.monogram.textContent = (first + last).toLocaleUpperCase();
-    const tone = Array.from(name).reduce(
-      (hash, char) => (hash * 31 + char.codePointAt(0)) % 6,
-      0
-    );
+    const { initials, tone } = DisplayNameUtils.getMonogram(correspondent);
+    this.monogram.textContent = initials;
     this.monogram.dataset.tone = String(tone);
   }
 

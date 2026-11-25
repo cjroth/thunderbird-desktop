@@ -1,0 +1,48 @@
+[
+  {
+    "namespace": "thunderboltCalendar",
+    "functions": [
+      {
+        "name": "listCalendars",
+        "type": "function",
+        "async": true,
+        "parameters": []
+      },
+      {
+        "name": "listItems",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          { "name": "calendarId", "type": "string" },
+          { "name": "kind", "type": "string", "enum": ["event", "task"] },
+          { "name": "limit", "type": "integer", "minimum": 1, "maximum": 100 },
+          { "name": "start", "type": "string", "optional": true },
+          { "name": "end", "type": "string", "optional": true }
+        ]
+      },
+      {
+        "name": "draftEvent",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          { "name": "tabId", "type": "integer" },
+          { "name": "calendarId", "type": "string" },
+          { "name": "title", "type": "string" },
+          { "name": "start", "type": "string" },
+          { "name": "end", "type": "string" }
+        ]
+      },
+      {
+        "name": "draftTask",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          { "name": "tabId", "type": "integer" },
+          { "name": "calendarId", "type": "string" },
+          { "name": "title", "type": "string" },
+          { "name": "due", "type": "string", "optional": true }
+        ]
+      }
+    ]
+  }
+]

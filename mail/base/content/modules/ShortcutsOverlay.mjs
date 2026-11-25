@@ -17,7 +17,7 @@ export function setupShortcuts() {
  */
 async function setupShortcutStrings() {
   const buttons = {
-    "space-toggle": ["collapseButton", "spacesToolbarReveal"],
+    "space-toggle": ["spacesToolbarReveal"],
     "space-mail": ["mailButton"],
     "space-addressbook": ["addressBookButton"],
     "space-calendar": ["calendarButton"],

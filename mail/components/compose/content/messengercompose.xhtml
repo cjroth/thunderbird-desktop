@@ -2079,6 +2079,15 @@
              ondragover="envelopeDragObserver.onDragOver(event);"
              ondrop="envelopeDragObserver.onDrop(event);"
              ondragleave="envelopeDragObserver.onDragLeave(event);">
+      <html:button
+        id="readerComposeDetails"
+        type="button"
+        class="reader-compose-details button button-flat"
+        aria-controls="top-gradient-box subject-box"
+        aria-expanded="false"
+        onclick="this.ariaExpanded = String(this.ariaExpanded != 'true');"
+        data-l10n-id="reader-compose-details"
+      ></html:button>
       <hbox id="top-gradient-box" class="address-identity-recipient">
         <hbox class="aw-firstColBox"/>
         <hbox id="identityLabel-box" align="center" pack="end">
@@ -2480,6 +2489,22 @@
         </p>
       </html:div>
 
+      <html:span
+        id="readerReplyPrompt"
+        class="reader-reply-prompt"
+        aria-hidden="true"
+        hidden="hidden"
+        data-l10n-id="reader-compose-prompt"
+      ></html:span>
+      <html:button
+        id="readerComposeQuote"
+        type="button"
+        class="reader-compose-quote button button-flat"
+        hidden="hidden"
+        aria-controls="messageEditor"
+        aria-expanded="false"
+        data-l10n-id="reader-compose-quote"
+      ></html:button>
       <findbar id="FindToolbar" browserid="messageEditor"/>
     </html:div>
 

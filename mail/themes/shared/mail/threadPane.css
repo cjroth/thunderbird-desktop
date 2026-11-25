@@ -687,35 +687,54 @@ tr[data-properties~="outgoing"].selected .correspondentcol-column {
 }
 
 .mail-scopes {
+  --scope-padding-inline: 10px;
+  --scope-baseline-gap: 4px;
   grid-column: 1 / -1;
   display: flex;
-  gap: clamp(10px, 4cqi, 22px);
+  gap: 2px;
   align-items: end;
   min-inline-size: 0;
+  margin-inline-start: calc(-1 * var(--scope-padding-inline));
   overflow-x: auto;
   scrollbar-width: thin;
 
   & button {
     appearance: none;
+    position: relative;
     display: block;
     min-inline-size: 0;
+    min-block-size: 28px;
     flex: 0 0 auto;
-    padding: 3px 1px 10px;
-    margin: 0;
+    padding: 4px var(--scope-padding-inline);
+    margin: 0 0 var(--scope-baseline-gap);
     border: 0;
-    border-block-end: 2px solid transparent;
-    border-radius: 0;
+    border-radius: var(--button-border-radius);
     background: transparent;
     color: var(--desk-muted);
     font: 550 0.92rem/1.4 var(--desk-font, system-ui);
 
-    &[aria-pressed="true"] {
-      border-block-end-color: var(--desk-accent);
-      color: var(--desk-accent);
+    &:hover {
+      background-color: var(--toolbar-button-hover-background-color);
+      color: var(--desk-ink);
     }
 
-    &:hover {
-      color: var(--desk-ink);
+    &[aria-pressed="true"] {
+      color: var(--desk-accent);
+
+      &::after {
+        content: "";
+        position: absolute;
+        inset-inline: var(--scope-padding-inline);
+        inset-block-end: calc(-1 * var(--scope-baseline-gap));
+        border-block-end: 2px solid currentColor;
+      }
+    }
+
+    @media (forced-colors: active) {
+      &:hover {
+        outline: 1px solid ButtonText;
+        outline-offset: -1px;
+      }
     }
 
     &:focus-visible {

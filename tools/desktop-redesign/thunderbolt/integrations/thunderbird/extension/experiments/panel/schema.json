@@ -1,0 +1,32 @@
+[
+  {
+    "namespace": "thunderboltPanel",
+    "types": [
+      {
+        "id": "Appearance",
+        "type": "object",
+        "properties": {
+          "mode": { "type": "string", "enum": ["light", "dark"] },
+          "locale": { "type": "string" },
+          "colors": { "type": "object", "additionalProperties": { "type": "string" } },
+          "fontFamily": { "type": "string" },
+          "fontSize": { "type": "string" },
+          "buttonRadius": { "type": "string" },
+          "panelRadius": { "type": "string" },
+          "buttonHeight": { "type": "string" }
+        }
+      }
+    ],
+    "functions": [
+      { "name": "openNewTab", "type": "function", "async": true, "parameters": [] },
+      { "name": "getAppearance", "type": "function", "async": true, "parameters": [] }
+    ],
+    "events": [
+      {
+        "name": "onAppearanceChanged",
+        "type": "function",
+        "parameters": [{ "name": "appearance", "$ref": "Appearance" }]
+      }
+    ]
+  }
+]

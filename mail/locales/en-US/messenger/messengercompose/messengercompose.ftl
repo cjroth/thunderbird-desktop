@@ -26,6 +26,12 @@ compose-default-subject = (no subject)
 compose-subject-field =
     .placeholder = Add a subject
 
+reader-compose-prompt = Write your reply…
+reader-compose-quote = Quoted message
+    .title = Show or hide the original quoted message
+reader-compose-details = Details
+    .title = Edit sender, additional recipients, and subject
+
 compose-formatting-button = Formatting
     .title = Show or hide text formatting
 compose-focus-button = Focus

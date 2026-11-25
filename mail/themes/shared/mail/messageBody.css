@@ -31,11 +31,11 @@ mailattachcount {
      original content width and formatting. */
   body > :is(.moz-text-flowed, .moz-text-plain) {
     box-sizing: border-box;
-    margin-inline: 0;
-    padding-inline: calc(clamp(16px, 5.5vi, 46px) - 8px);
-    max-inline-size: 76ch;
-    padding-block: clamp(6px, 2vi, 20px);
-    line-height: 1.6;
+    margin-inline: auto;
+    inline-size: min(720px, calc(100vi - 2 * clamp(16px, 4.5vi, 48px)));
+    max-inline-size: 100%;
+    padding-block: clamp(8px, 2vi, 20px) 1.5rem;
+    line-height: 1.65;
   }
 
   .moz-main-header,

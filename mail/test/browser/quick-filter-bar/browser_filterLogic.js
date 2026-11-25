@@ -365,6 +365,24 @@ add_task(async function test_filter_text_single_word_and_predicates() {
   // sanity check non-matching
   await set_filter_text("notgonnamatchevercauseisayso");
   assert_messages_in_view([]);
+  const tree = get_about_3pane().threadTree;
+  const placeholder = tree.querySelector("#placeholderNoMessages");
+  await TestUtils.waitForCondition(() =>
+    BrowserTestUtils.isVisible(placeholder)
+  );
+  const list = tree.getBoundingClientRect();
+  const doc = tree.ownerDocument;
+  Assert.ok(BrowserTestUtils.isHidden(doc.getElementById("messagePane")));
+  Assert.ok(BrowserTestUtils.isHidden(doc.getElementById("messagePaneSplitter")));
+  const header = tree.table.header.getBoundingClientRect();
+  const empty = placeholder.getBoundingClientRect();
+  Assert.lessOrEqual(
+    Math.abs(
+      empty.top + empty.bottom - (list.top + header.height + list.bottom)
+    ),
+    2,
+    "The empty state should be centered below the column headings"
+  );
   // disable body, still should get nothing
   await toggle_text_constraints("body");
   assert_messages_in_view([]);

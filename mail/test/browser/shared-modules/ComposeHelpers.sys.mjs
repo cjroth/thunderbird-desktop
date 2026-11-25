@@ -19,6 +19,34 @@ import { MailServices } from "resource:///modules/MailServices.sys.mjs";
 var kTextNodeType = 3;
 
 /**
+ * These helpers exercise a standalone compose window and wait for a window
+ * notification that an embedded editor intentionally does not emit.
+ */
+async function openStandaloneEditor(win, key, shiftKey = false) {
+  const pref = "mail.compose.inReader";
+  const previous = Services.prefs.prefHasUserValue(pref)
+    ? Services.prefs.getBoolPref(pref)
+    : undefined;
+  Services.prefs.setBoolPref(pref, false);
+  try {
+    const opened = BrowserTestUtils.domWindowOpenedAndLoaded(
+      null,
+      w =>
+        w.document.documentURI ==
+        "chrome://messenger/content/messengercompose/messengercompose.xhtml"
+    );
+    EventUtils.synthesizeKey(key, { accelKey: true, shiftKey }, win);
+    return await _wait_for_compose_window(await opened);
+  } finally {
+    if (previous === undefined) {
+      Services.prefs.clearUserPref(pref);
+    } else {
+      Services.prefs.setBoolPref(pref, previous);
+    }
+  }
+}
+
+/**
  * Opens the compose window by starting a new message
  *
  * @param {Window} [win] - The window from which to spawn the compose window.
@@ -26,14 +54,7 @@ var kTextNodeType = 3;
  * @returns {Window} The loaded window of type "msgcompose".
  */
 export async function open_compose_new_mail(win = mc) {
-  const composePromise = BrowserTestUtils.domWindowOpenedAndLoaded(
-    null,
-    w =>
-      w.document.documentURI ==
-      "chrome://messenger/content/messengercompose/messengercompose.xhtml"
-  );
-  EventUtils.synthesizeKey("n", { shiftKey: false, accelKey: true }, win);
-  return _wait_for_compose_window(await composePromise);
+  return openStandaloneEditor(win, "n");
 }
 
 /**
@@ -45,14 +66,7 @@ export async function open_compose_new_mail(win = mc) {
  * @returns {Window} The loaded window of type "msgcompose".
  */
 export async function open_compose_with_reply(win = mc) {
-  const composePromise = BrowserTestUtils.domWindowOpenedAndLoaded(
-    null,
-    w =>
-      w.document.documentURI ==
-      "chrome://messenger/content/messengercompose/messengercompose.xhtml"
-  );
-  EventUtils.synthesizeKey("r", { shiftKey: false, accelKey: true }, win);
-  return _wait_for_compose_window(await composePromise);
+  return openStandaloneEditor(win, "r");
 }
 
 /**
@@ -64,14 +78,7 @@ export async function open_compose_with_reply(win = mc) {
  * @returns {Window} The loaded window of type "msgcompose".
  */
 export async function open_compose_with_reply_to_all(win = mc) {
-  const composePromise = BrowserTestUtils.domWindowOpenedAndLoaded(
-    null,
-    w =>
-      w.document.documentURI ==
-      "chrome://messenger/content/messengercompose/messengercompose.xhtml"
-  );
-  EventUtils.synthesizeKey("R", { shiftKey: true, accelKey: true }, win);
-  return _wait_for_compose_window(await composePromise);
+  return openStandaloneEditor(win, "R", true);
 }
 
 /**
@@ -83,14 +90,7 @@ export async function open_compose_with_reply_to_all(win = mc) {
  * @returns {Window} The loaded window of type "msgcompose".
  */
 export async function open_compose_with_reply_to_list(win = mc) {
-  const composePromise = BrowserTestUtils.domWindowOpenedAndLoaded(
-    null,
-    w =>
-      w.document.documentURI ==
-      "chrome://messenger/content/messengercompose/messengercompose.xhtml"
-  );
-  EventUtils.synthesizeKey("l", { shiftKey: true, accelKey: true }, win);
-  return _wait_for_compose_window(await composePromise);
+  return openStandaloneEditor(win, "l", true);
 }
 
 /**

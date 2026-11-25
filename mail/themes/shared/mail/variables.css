@@ -111,6 +111,7 @@
   --sidebar-color: var(--sidebar-text-color);
   --sidebar-border: var(--sidebar-border-color);
 
+  --navigation-gutter: 5px;
   --tab-min-height: 33px;
   --lwt-tabs-border-color: var(--sidebar-border);
   --tabs-tabbar-border-size: 1px;

@@ -240,6 +240,13 @@ add_task(async function test_open_reload_close() {
       openSpacesUrls: [url1, url2],
     });
 
+    await window.sendMessage("checkTabs", {
+      action: "newTab",
+      url: url1,
+      spaceName: "space_1",
+      openSpacesUrls: [url1, url2, url1],
+    });
+
     // TODO: Add test for tab reloading, once this has been implemented.
 
     // Remove spaces and check that related spaces tab are closed.

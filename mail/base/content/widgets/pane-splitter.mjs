@@ -910,7 +910,7 @@ class PaneSplitter extends HTMLHRElement {
     const size = this.isCollapsed ? 0 : this[this.#resizeProperty];
 
     if (size == null) {
-      this.parentNode.style.removeProperty(this._cssName[this.#resizeProperty]);
+      this.#setSize(null);
     }
 
     this.parentNode.style.removeProperty(
@@ -940,10 +940,11 @@ class PaneSplitter extends HTMLHRElement {
   /**
    * Set the size of the `resizeElement`.
    *
-   * @param {string} size A size to set as the css variable value.
+   * @param {?string} size - A CSS size, or null to restore the default.
    */
   #setSize(size) {
     if (this.resizeElement) {
+      this.classList.toggle("splitter-flexible", size == "100%");
       this.parentNode.style.setProperty(
         this._cssName[this.#resizeProperty],
         size

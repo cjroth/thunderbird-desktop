@@ -1,0 +1,3231 @@
+--- a/deploy/docker/frontend.Dockerfile
++++ b/deploy/docker/frontend.Dockerfile
+@@ -26,7 +26,7 @@
+ # time to locate and compile the .po catalogs (THU-806).
+ COPY vite.config.ts lingui.config.ts tsconfig.json tsconfig.node.json ./
+ # Helpers imported by vite.config.ts must be present even when only used in dev.
+-COPY scripts/copy-powersync-assets.ts scripts/webkit-compat.ts scripts/tinfoil-search-relay.ts scripts/exa-relay.ts ./scripts/
++COPY scripts/copy-powersync-assets.ts scripts/webkit-compat.ts scripts/tinfoil-search-relay.ts scripts/exa-relay.ts scripts/thunderbird-panel-build.ts ./scripts/
+ COPY components.json ./
+ COPY .storybook ./.storybook
+
+--- a/src/acp/built-in-adapter.ts
++++ b/src/acp/built-in-adapter.ts
+@@ -61,6 +61,7 @@
+ } from '@/mini-apps/mini-app-context-note'
+ import { webToolNames } from '@/lib/tools'
+ import { tinfoilSession } from '@/lib/tinfoil-session'
++import { isThunderbirdPanel } from '@/lib/thunderbird'
+ import { createLiveProxyFetch } from '@/lib/proxy-fetch'
+ import { isSsoMode } from '@/lib/auth-mode'
+ import { getAuthToken } from '@/lib/auth-token'
+@@ -334,13 +335,14 @@
+     }
+     return {
+       descriptor: {
+-        kind: 'openai-compat',
++        ...(isThunderbirdPanel
++          ? { kind: 'confidential', vendor: model.vendor, reasoning: true }
++          : { kind: 'openai-compat', reasoning: hasExplicitReasoning(profile) }),
+         providerId: 'tinfoil',
+         modelId: model.model,
+         baseURL: client.baseURL,
+         apiKey,
+         fetch: wrapFetch(Object.assign(fetch, { preconnect: async () => false })),
+-        reasoning: hasExplicitReasoning(profile),
+         contextWindow: model.contextWindow ?? undefined,
+         supportsImages,
+       },
+--- a/src/acp/connect.ts
++++ b/src/acp/connect.ts
+@@ -32,6 +32,7 @@
+ import type { AcpAdapterDeps } from './acp-adapter'
+ import type { AcpCommand } from './translators/acp-to-ai-sdk'
+ import type { BuiltInAdapterOptions } from './built-in-adapter'
++import { isThunderbirdPanel } from '@/lib/thunderbird'
+
+ /** Connection-scoped context handed to {@link connectToAgent}. Deliberately
+  *  carries only what's needed to OPEN a connection — per-thread fields travel
+@@ -68,7 +69,7 @@
+   deps: ConnectToAgentDeps = {},
+ ): Promise<AgentAdapter> => {
+   const isActive = deps.isAgentActive ?? (() => isAgentActive(getDb(), agent))
+-  if (agent.type !== 'built-in' && !(await isActive())) {
++  if (agent.type !== 'built-in' && (isThunderbirdPanel || !(await isActive()))) {
+     throw createAgentUnavailableError(agent.id)
+   }
+   switch (agent.type) {
+--- a/src/ai/tinfoil-client.ts
++++ b/src/ai/tinfoil-client.ts
+@@ -12,6 +12,8 @@
+ import { attestationStore, type AttestationStore } from '@/attestation/store'
+ import { tinfoilAttestationKey } from '@/attestation/target'
+ import type { AttestationReporter } from '@/attestation/types'
++import { isThunderbirdPanel } from '@/lib/thunderbird'
++import { thunderbirdModelPin } from '@/providers/thunderbird-model'
+
+ export const tinfoilAttestationTimeoutMs = 15_000
+
+@@ -290,7 +292,11 @@
+     const { AttestedTinfoilClient } = await import('@/attestation/tinfoil')
+     if (type === 'user') {
+       return AttestedTinfoilClient.create(
+-        { userCacheSecret: getUserCacheSecret(), signal },
++        {
++          userCacheSecret: getUserCacheSecret(),
++          signal,
++          pinnedModel: isThunderbirdPanel ? thunderbirdModelPin : undefined,
++        },
+         reporter,
+         tinfoilAttestationTimeoutMs,
+       )
+--- a/src/api/config-store.ts
++++ b/src/api/config-store.ts
+@@ -6,6 +6,7 @@
+ import { create } from 'zustand'
+ import { persist } from 'zustand/middleware'
+ import { usesLocalProviders } from '@/lib/provider-mode'
++import { isThunderbirdPanel } from '@/lib/thunderbird'
+
+ export type AppConfig = {
+   /** Public authentication capabilities for servers selected at runtime. */
+@@ -112,7 +113,7 @@
+  *  `/` is plain text, and no skill is offered to any agent. Absent means off. Role-based visibility is
+  *  expected to replace this predicate. */
+ export const selectMinimalMode = (config: AppConfig, localProviders = usesLocalProviders()): boolean =>
+-  !localProviders && config.minimalMode === true
++  isThunderbirdPanel || (!localProviders && config.minimalMode === true)
+
+ /** The operator's header logo, or null when `BRAND_LOGO_URL` is unset. Dark
+  *  falls back to the light URL; `alt` is empty when unset, so the caller picks
+@@ -130,7 +131,7 @@
+
+ /** Whether the UI offers adding custom agents. Absent config defaults to allowed. */
+ export const selectAllowCustomAgents = (config: AppConfig, localProviders = usesLocalProviders()): boolean =>
+-  localProviders || config.allowCustomAgents !== false
++  !isThunderbirdPanel && (localProviders || config.allowCustomAgents !== false)
+
+ /** Whether the server explicitly accepts debug transcript uploads. Absent
+  * config is disabled because standalone mode has no backend recipient. */
+--- a/src/app.tsx
++++ b/src/app.tsx
+@@ -7,7 +7,7 @@
+ import { useLingui } from '@lingui/react/macro'
+ import { QueryClientProvider } from '@tanstack/react-query'
+ import { queryClient } from '@/lib/query-client'
+-import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
++import { BrowserRouter, HashRouter, Navigate, Route, Routes } from 'react-router'
+ import { PowerSyncContext } from '@powersync/react'
+
+ import { i18n } from '@/i18n'
+@@ -64,6 +64,7 @@
+ import { loadSearchPalette } from '@/search/palette/search-palette-loader'
+ import { MCPProvider } from './lib/mcp-provider'
+ import { ProxyFetchProvider } from './lib/proxy-fetch-context'
++import { isThunderbirdPanel } from './lib/thunderbird'
+ import Loading from './loading'
+ import type { InitData } from './types'
+ import { useSettings } from './hooks/use-settings'
+@@ -146,6 +147,9 @@
+   return preloadInBackground(Object.values(routeChunkLoaders))
+ }
+
++// Use hash routing in the single bundled extension document.
++const AppRouter = isThunderbirdPanel ? HashRouter : BrowserRouter
++
+ const AppContent = ({ initData }: { initData: InitData }) => {
+   useDeviceSessionBinding()
+   useMcpSync()
+@@ -166,11 +170,11 @@
+   }, [])
+
+   return (
+-    <BrowserRouter>
++    <AppRouter>
+       <AppRoutes initData={initData} />
+       <UpdateNotification />
+       <PendingDeviceModal />
+-    </BrowserRouter>
++    </AppRouter>
+   )
+ }
+
+--- a/src/attestation/tinfoil.test.ts
++++ b/src/attestation/tinfoil.test.ts
+@@ -3,11 +3,12 @@
+  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+ import { afterEach, describe, expect, it, mock, spyOn } from 'bun:test'
+-import { AttestationError, RouterHTTPClient, EnclaveHTTPClient } from 'tinfoil'
++import { AttestationError, RouterHTTPClient, EnclaveHTTPClient, GatewayHTTPClient } from 'tinfoil'
+ import { getClock } from '@/testing-library'
+ import { testTinfoilVerification } from '@/test-utils/tinfoil'
+ import { createAttestationStore } from './store'
+ import { AttestedTinfoilClient, readTinfoilEvidence, type TinfoilVerification } from './tinfoil'
++import { thunderbirdModelPin } from '@/providers/thunderbird-model'
+
+ /** Exercise the public SDK surface, without installing state into private vendor fields. */
+ const setup = () => {
+@@ -222,6 +223,30 @@
+     },
+   )
+
++  it('requires the pinned DeepSeek replica and refuses inference after re-verification fails', async () => {
++    const { reporter, snapshot } = setup()
++    const { model, repo } = thunderbirdModelPin
++    const proof = testTinfoilVerification(undefined, { configRepo: repo })
++    const sdk = {
++      baseURL: 'https://inference-gateway.tinfoil.sh/v1/',
++      fetch: mock(async () => new Response()),
++      close: mock(async () => {}),
++      ensureVerified: mock(async () => proof),
++      current: [{ host: 'verified-replica', pinnedModel: model, verification: proof }],
++    }
++    const factory = spyOn(GatewayHTTPClient, 'create').mockResolvedValue(sdk as unknown as GatewayHTTPClient)
++    const router = spyOn(RouterHTTPClient, 'create')
++    const client = await AttestedTinfoilClient.create({ pinnedModel: thunderbirdModelPin }, reporter, 1_000)
++    expect(factory.mock.calls[0][0]).toMatchObject({ modelPins: new Map([[model, { repo }]]), pinnedModelsOnly: true })
++    expect(client.baseURL).toBe('https://inference-gateway.tinfoil.sh/v1')
++    expect(snapshot()).toMatchObject({ status: 'verified', evidence: { endpoint: 'verified-replica' } })
++    sdk.ensureVerified.mockRejectedValue(new AttestationError('measurement rejected'))
++    await expect(client.fetch(new URL('chat/completions', client.baseURL))).rejects.toThrow('measurement rejected')
++    expect(sdk.fetch).not.toHaveBeenCalled()
++    expect(router).not.toHaveBeenCalled()
++    expect(snapshot()).toMatchObject({ status: 'failed' })
++  })
++
+   it('releases a factory result that arrives after the initialization deadline', async () => {
+     const { sdk, reporter, snapshot } = setup()
+     const created = Promise.withResolvers<RouterHTTPClient>()
+--- a/src/attestation/tinfoil.ts
++++ b/src/attestation/tinfoil.ts
+@@ -2,14 +2,44 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this
+  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+-import { EnclaveHTTPClient, RouterHTTPClient, type RouterOptions } from 'tinfoil'
++import { EnclaveHTTPClient, GatewayHTTPClient, RouterHTTPClient, type RouterOptions } from 'tinfoil'
+ import { getErrorName } from '@/lib/error-utils'
+ import { withDeadline } from '@/lib/timeout'
+ import type { AttestationEvidence, AttestationReporter } from './types'
+
+ export type TinfoilVerification = Awaited<ReturnType<RouterHTTPClient['ensureVerified']>>
+ type HttpClient = Pick<RouterHTTPClient, 'fetch' | 'baseURL' | 'enclave' | 'ensureVerified' | 'close'>
+-type Options = RouterOptions & { enclave?: { host: string; repo: string } }
++type ModelPin = { model: string; repo: string }
++type Options = RouterOptions & { enclave?: { host: string; repo: string }; pinnedModel?: ModelPin }
++
++/** Seal to a replica verified against the pinned model repository. The gateway only relays sealed bodies. */
++const createPinnedGateway = async (pin: ModelPin, settings: RouterOptions): Promise<HttpClient> => {
++  const gateway = await GatewayHTTPClient.create({
++    modelPins: new Map([[pin.model, { repo: pin.repo }]]),
++    pinnedModelsOnly: true,
++    signal: settings.signal,
++    userCacheSecret: settings.userCacheSecret,
++    verificationCheck: settings.verificationCheck,
++  })
++  let verifiedHost = ''
++  return {
++    baseURL: gateway.baseURL,
++    fetch: gateway.fetch,
++    close: () => gateway.close(),
++    get enclave() {
++      return verifiedHost
++    },
++    ensureVerified: async (options) => {
++      const proof = await gateway.ensureVerified(pin.model, options)
++      const replica = gateway.current.find((entry) => entry.verification === proof && entry.pinnedModel === pin.model)
++      if (!replica) {
++        throw new Error('Tinfoil could not identify the verified model replica.')
++      }
++      verifiedHost = replica.host
++      return proof
++    },
++  }
++}
+
+ /** Format only the public registers attested by the verifier, without channel keys. */
+ export const tinfoilMeasurement = (verification: TinfoilVerification): string => {
+@@ -38,7 +68,9 @@
+   private expiration: ReturnType<typeof setTimeout> | undefined
+   private failure: unknown
+   readonly baseURL: string
+-  readonly enclave: string
++  get enclave(): string {
++    return this.client.enclave
++  }
+
+   constructor(
+     private readonly client: HttpClient,
+@@ -47,7 +79,6 @@
+     baseURL = client.baseURL.replace(/\/$/, ''),
+   ) {
+     this.baseURL = baseURL
+-    this.enclave = client.enclave
+   }
+
+   /** Creates a verified SDK client, explicitly retaining sealed HTTP bodies on every platform. */
+@@ -70,9 +101,11 @@
+       },
+     }
+     reporter.publish({ status: 'verifying' })
+-    const pending: Promise<HttpClient> = options.enclave
+-      ? EnclaveHTTPClient.create(options.enclave.host, options.enclave.repo, settings)
+-      : RouterHTTPClient.create(settings)
++    const pending: Promise<HttpClient> = options.pinnedModel
++      ? createPinnedGateway(options.pinnedModel, settings)
++      : options.enclave
++        ? EnclaveHTTPClient.create(options.enclave.host, options.enclave.repo, settings)
++        : RouterHTTPClient.create(settings)
+     try {
+       const client = await withDeadline(pending, timeoutMs, () => {
+         const error = attestationTimeout(timeoutMs)
+@@ -80,7 +113,9 @@
+         return error
+       })
+       signal.throwIfAborted()
+-      const baseURL = options.baseURL ?? (options.enclave ? client.baseURL : new URL('v1/', client.baseURL).href)
++      const baseURL =
++        options.baseURL ??
++        (options.enclave || options.pinnedModel ? client.baseURL : new URL('v1/', client.baseURL).href)
+       const observed = new AttestedTinfoilClient(client, reporter, timeoutMs, baseURL.replace(/\/$/, ''))
+       await observed.ensureVerified()
+       return observed
+--- a/src/chats/resolve-session-agent.ts
++++ b/src/chats/resolve-session-agent.ts
+@@ -4,6 +4,7 @@
+
+ import { builtInAgent } from '@/defaults/agents'
+ import type { Agent } from '@/types/acp'
++import { isThunderbirdPanel } from '@/lib/thunderbird'
+
+ /**
+  * What the user has chosen, from synced settings. `lastUsedAgentId` is the
+@@ -37,6 +38,9 @@
+   allAgents: Agent[],
+   candidates: AgentPreference & { threadAgentId?: string | null; discoveredDefaultAgent?: Agent },
+ ): Agent => {
++  if (isThunderbirdPanel) {
++    return builtInAgent
++  }
+   const findAgent = (agentId: string | null | undefined) =>
+     agentId ? allAgents.find((a) => a.id === agentId) : undefined
+   return (
+--- a/src/components/chat/chat-model-picker.tsx
++++ b/src/components/chat/chat-model-picker.tsx
+@@ -6,6 +6,7 @@
+ import { useCreateItem } from '@/components/create-item/context'
+ import { ModelSelector } from '@/components/ui/model-selector'
+ import { useIsMobile } from '@/hooks/use-mobile'
++import { isThunderbirdPanel } from '@/lib/thunderbird'
+
+ /**
+  * Model picker for the chat composer. Renders only for the built-in
+@@ -39,7 +40,7 @@
+       selectedModel={selectedModel ?? null}
+       chatThread={chatThread ?? null}
+       onModelChange={handleModelChange}
+-      onAddModels={() => openCreateItem({ kind: 'model' })}
++      onAddModels={isThunderbirdPanel ? undefined : () => openCreateItem({ kind: 'model' })}
+       side={isMobile ? 'top' : 'bottom'}
+       align="end"
+     />
+--- a/src/components/chat/chat-prompt-input.tsx
++++ b/src/components/chat/chat-prompt-input.tsx
+@@ -68,6 +68,7 @@
+ import { EffortSelector } from './effort-selector'
+ import { ChatModelPicker } from './chat-model-picker'
+ import { ChatAttestation } from './attestation'
++import { isThunderbirdPanel } from '@/lib/thunderbird'
+ import { buildAttachmentPart } from '@/lib/attachments'
+ import { collapseTextSelectionToEnd } from '@/lib/focus'
+ import { hasAssistantContent } from '@/lib/message-utils'
+@@ -1008,7 +1009,7 @@
+                   <Trans>{agentName} can&apos;t take attachments. Remove the attached files to send.</Trans>
+                 </ComposerAlert>
+               )}
+-              {modelNeedsSetup && (
++              {modelNeedsSetup && !isThunderbirdPanel && (
+                 <ComposerAlert key="model-needs-setup" tone="info">
+                   <Trans>
+                     <button
+@@ -1095,7 +1096,7 @@
+               }
+               handleSlashChange(value, getTextarea()?.selectionStart ?? value.length)
+             }}
+-            placeholder={t`Ask me anything…`}
++            placeholder={isThunderbirdPanel ? t`Ask about your workspace…` : t`Ask me anything…`}
+             showSubmitButton
+             onSubmit={handleSubmit}
+             // Allow sending an attachment even with no typed text (matches the Enter behavior).
+--- a/src/components/chat/chat-ui.tsx
++++ b/src/components/chat/chat-ui.tsx
+@@ -23,6 +23,9 @@
+ import { getGreeting } from './chat-ui-greeting'
+ import { useLingui } from '@lingui/react/macro'
+ import { ChatContentReady } from './chat-content-ready'
++import { isThunderbirdPanel } from '@/lib/thunderbird'
++import { ThunderbirdPrompts, ThunderbirdWelcome } from '@/components/thunderbird-workspace'
++import { ThunderbirdKeySetup } from './thunderbird-settings-dialog'
+
+ const MiniAppApprovalHost = lazy(() =>
+   import('@/mini-apps/mini-app-approval-host').then((module) => ({ default: module.MiniAppApprovalHost })),
+@@ -49,7 +52,7 @@
+
+ export default function ChatUI() {
+   const { i18n, t } = useLingui()
+-  const { chatInstance, miniAppApprovalQueue, awaitingSyncedMessages } = useCurrentChatSession()
++  const { id, chatInstance, miniAppApprovalQueue, awaitingSyncedMessages } = useCurrentChatSession()
+   const modelNeedsSetup = useModelNeedsSetup()
+
+   // ChatUI only needs the structural "are there any messages" signal (to switch
+@@ -116,7 +119,7 @@
+     }
+   }, [hasMessages, scrollToBottom])
+
+-  const showModelSetup = modelNeedsSetup && !hasMessages
++  const showModelSetup = !isThunderbirdPanel && modelNeedsSetup && !hasMessages
+
+   return (
+     <div className="h-full w-full" style={{ paddingBottom: 'var(--kb, 0px)' }}>
+@@ -152,7 +155,7 @@
+                     plus 1.5rem of breathing room so the first message doesn't
+                     sit flush against the header's scrim (which keeps scrolled
+                     messages legible behind it). */}
+-                <div className="mx-auto w-full min-w-[300px] max-w-[728px] space-y-4 px-3 pt-[calc(var(--header-inset)+1.5rem)] pb-0 md:px-4">
++                <div className="tb-transcript mx-auto w-full min-w-[300px] max-w-[728px] space-y-4 px-3 pt-[calc(var(--header-inset)+1.5rem)] pb-0 md:px-4">
+                   <Suspense fallback={null}>
+                     <ChatMessageList scrollTargetRef={scrollTargetRef} />
+                     <ChatContentReady />
+@@ -196,6 +199,8 @@
+         <m.div
+           className={cn(
+             'relative z-10 px-3 pb-3 md:px-4 md:pb-4 flex',
++            isThunderbirdPanel && 'tb-composer-region',
++            isThunderbirdPanel && showsEmptyState && 'tb-composer-empty',
+             isNativeMobile && 'pb-0',
+             showsEmptyState && !isMobile && 'flex-1 items-center',
+           )}
+@@ -203,7 +208,7 @@
+           layout
+           transition={firstSendTween}
+         >
+-          <m.div className="flex flex-col items-center w-full" layout transition={firstSendTween}>
++          <m.div className="tb-composer-column flex flex-col items-center w-full" layout transition={firstSendTween}>
+             {/* Exit fade so the greeting dissolves while the composer slides
+                 down on the first send — without it the greeting pops out
+                 abruptly, which reads as a hitch in the otherwise-smooth
+@@ -216,9 +221,9 @@
+                   initial={{ opacity: 0 }}
+                   animate={{ opacity: 1 }}
+                   exit={{ opacity: 0, transition: { duration: 0.15 } }}
+-                  className="mb-24"
++                  className={isThunderbirdPanel ? 'tb-greeting' : 'mb-24'}
+                 >
+-                  <EmptyChatGreeting />
++                  {isThunderbirdPanel ? <ThunderbirdWelcome /> : <EmptyChatGreeting />}
+                 </m.div>
+               )}
+             </AnimatePresence>
+@@ -241,6 +246,8 @@
+             </div>
+             <m.div className="w-full max-w-[696px] min-w-[268px] rounded-2xl" layout transition={firstSendTween}>
+               <ChatPromptInput />
++              {isThunderbirdPanel && <ThunderbirdKeySetup />}
++              {isThunderbirdPanel && showsEmptyState && <ThunderbirdPrompts threadId={id} />}
+               {!hasMessages && <ChatContentReady />}
+             </m.div>
+           </m.div>
+--- a/src/dal/models.ts
++++ b/src/dal/models.ts
+@@ -23,6 +23,10 @@
+ import { createDefaultModelProfile, deleteModelProfileForModel } from './model-profiles'
+ import { usesLocalProviders } from '@/lib/provider-mode'
+ import { isModelReady } from '@/settings/models/model-policy'
++import { isThunderbirdPanel } from '@/lib/thunderbird'
++import { thunderbirdModel } from '@/providers/thunderbird-model'
++
++const panelModelCondition = isThunderbirdPanel ? eq(modelsTable.id, thunderbirdModel.id) : undefined
+
+ /** Models whose requests and credentials do not require a Thunderbolt server. */
+ const standaloneModelCondition = sql`${modelsTable.provider} != 'thunderbolt' AND (${modelsTable.provider} != 'tinfoil' OR COALESCE(${modelsTable.isSystem}, 0) != 1)`
+@@ -111,6 +115,7 @@
+   const query = selectModelsWithSecrets(db)
+     .where(
+       and(
++        panelModelCondition,
+         eq(modelsTable.enabled, 1),
+         providerConnectionCondition,
+         providerVisibilityCondition,
+@@ -150,6 +155,7 @@
+     )
+     .where(
+       and(
++        panelModelCondition,
+         isNull(modelsTable.deletedAt),
+         providerConnectionCondition,
+         providerVisibilityCondition,
+--- a/src/db/database.ts
++++ b/src/db/database.ts
+@@ -34,6 +34,11 @@
+     }
+
+     if (type === 'bun-sqlite') {
++      // A production UI can only open PowerSync. Keep the test adapter's Node/Bun
++      // imports out of the packaged application, including single-file builds.
++      if (import.meta.env.PROD) {
++        throw new Error('The Bun SQLite adapter is only available in tests')
++      }
+       const { BunSQLiteDatabase } = await import('./bun-sqlite-database')
+       this.#database = new BunSQLiteDatabase()
+     } else {
+--- a/src/hooks/use-app-language.ts
++++ b/src/hooks/use-app-language.ts
+@@ -6,6 +6,7 @@
+ import { sourceLocale } from '@shared/i18n/locales'
+ import { resolveLocale } from '@/i18n/resolve-locale'
+ import { usePostHogClient } from '@/lib/posthog'
++import { isThunderbirdPanel, useThunderbirdAppearance } from '@/lib/thunderbird'
+ import { useEffect, useEffectEvent } from 'react'
+ import { useSettings } from './use-settings'
+
+@@ -52,9 +53,10 @@
+   // and matches what the settings handler passes to `applyLanguageSetting`.
+   const settingValue = rawSetting?.value ?? null
+
+-  const activeLocale = resolveLocale(settingValue, getBrowserLanguages())
++  const hostLocale = useThunderbirdAppearance((state) => state.locale)
++  const activeLocale = hostLocale ?? resolveLocale(settingValue, getBrowserLanguages())
+
+-  const canSeed = !isLoading && !isSaving && !isModified && settingValue === null
++  const canSeed = !isThunderbirdPanel && !isLoading && !isSaving && !isModified && settingValue === null
+
+   // `useEffectEvent` keeps the unstable `setValue` out of the deps so the
+   // effect fires only on the `canSeed` transition, not on every render.
+--- a/src/hooks/use-create-new-chat.ts
++++ b/src/hooks/use-create-new-chat.ts
+@@ -2,6 +2,7 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this
+  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
++import { isThunderbirdPanel, openThunderboltTab } from '@/lib/thunderbird'
+ import { trackEvent } from '@/lib/posthog'
+ import { useCallback } from 'react'
+ import { useNavigate } from 'react-router'
+@@ -24,6 +25,10 @@
+   return useCallback(
+     (projectId?: string) => {
+       trackEvent('chat_new_clicked')
++      if (isThunderbirdPanel) {
++        void openThunderboltTab()
++        return
++      }
+       const search = projectId ? `?${new URLSearchParams({ projectId })}` : ''
+       navigate(`/chats/new${search}`, { state: { focusComposer: true, newChatRequestId: uuidv7() } })
+     },
+--- a/src/hooks/use-mcp-sync.tsx
++++ b/src/hooks/use-mcp-sync.tsx
+@@ -6,6 +6,7 @@
+ import { getRemoteMcpServers } from '@/dal'
+ import { useMCP } from '@/lib/mcp-provider'
+ import type { MCPTransportType } from '@/lib/mcp-transport'
++import { isThunderbirdPanel } from '@/lib/thunderbird'
+ import { toCompilableQuery } from '@powersync/drizzle-driver'
+ import { useQuery } from '@powersync/tanstack-react-query'
+ import { useEffect, useEffectEvent } from 'react'
+@@ -31,42 +32,42 @@
+   // effect on every provider render and race against the async `updateServer`
+   // it just kicked off.
+   const reconcile = useEffectEvent(async () => {
+-    const providerServerIds = new Set(servers.map((s) => s.id))
++    const desired = dbServers.map((row) => ({
++      id: row.id,
++      name: row.name ?? '',
++      url: row.url ?? '',
++      type: toTransportType(row.type),
++      enabled: row.enabled === 1,
++    }))
++    // The panel's MCP server belongs to this Thunderbird profile. Persisting it
++    // in synced mcp_servers would advertise an unusable endpoint on other devices.
++    const targets = isThunderbirdPanel
++      ? [
++          {
++            id: 'builtin-thunderbird',
++            name: 'Thunderbird',
++            url: 'thunderbird://local',
++            type: 'thunderbird' as const,
++            enabled: true,
++          },
++          ...desired,
++        ]
++      : desired
+
+-    for (const dbServer of dbServers) {
+-      if (!providerServerIds.has(dbServer.id)) {
+-        await addServer({
+-          id: dbServer.id,
+-          name: dbServer.name ?? '',
+-          url: dbServer.url ?? '',
+-          type: toTransportType(dbServer.type),
+-          enabled: dbServer.enabled === 1,
+-        })
++    const targetIds = new Set(targets.map((server) => server.id))
++    for (const server of servers) {
++      if (!targetIds.has(server.id)) {
++        removeServer(server.id)
+       }
+     }
+
+-    const dbServerIds = new Set(dbServers.map((s) => s.id))
+-    for (const providerServer of servers) {
+-      if (!dbServerIds.has(providerServer.id)) {
+-        removeServer(providerServer.id)
+-      }
+-    }
+-
+-    // `updateServer` redials when enabled so a URL or transport change actually
+-    // takes effect (the previous sync only handled enable toggles, leaving
+-    // editors connected to the old endpoint).
+-    for (const dbServer of dbServers) {
+-      const providerServer = servers.find((s) => s.id === dbServer.id)
++    for (const next of targets) {
++      const providerServer = servers.find((server) => server.id === next.id)
+       if (!providerServer) {
++        await addServer(next)
+         continue
+       }
+-      const next = {
+-        id: dbServer.id,
+-        name: dbServer.name ?? '',
+-        url: dbServer.url ?? '',
+-        type: toTransportType(dbServer.type),
+-        enabled: dbServer.enabled === 1,
+-      }
++
+       if (
+         providerServer.name !== next.name ||
+         providerServer.url !== next.url ||
+--- a/src/hooks/use-mobile.ts
++++ b/src/hooks/use-mobile.ts
+@@ -5,6 +5,7 @@
+ import { useSyncExternalStore } from 'react'
+
+ import { isMobile as isPlatformMobile, isTauriDesktop } from '@/lib/platform'
++import { isThunderbirdPanel } from '@/lib/thunderbird'
+
+ const mobileBreakpoint = 768
+ let mobileMediaQuery: MediaQueryList | undefined
+@@ -20,7 +21,7 @@
+
+ // The Tauri desktop app always uses the desktop layout, however narrow the
+ // window — mirrors the .force-desktop CSS overrides in src/index.css.
+-const getSnapshot = () => !isTauriDesktop() && mql().matches
++const getSnapshot = () => !isThunderbirdPanel && !isTauriDesktop() && mql().matches
+
+ export const useIsMobile = () => {
+   const isMobile = useSyncExternalStore(subscribe, getSnapshot)
+--- a/src/index.css
++++ b/src/index.css
+@@ -703,6 +703,34 @@
+   background-image: linear-gradient(var(--color-sidebar), var(--color-sidebar));
+ }
+
++/* Thunderbird supplies its button and popup corner radii from the owning
++   window. Keep toolbar items and fields at the control size, and overlays
++   and message surfaces at the popup size. */
++.thunderbird-panel {
++  --radius-sm: var(--radius-lg);
++  --radius-md: var(--radius-lg);
++  --radius-control: var(--radius-lg);
++  --radius-2xl: var(--radius-xl);
++  --radius-3xl: var(--radius-xl);
++}
++
++.thunderbird-panel :is([data-slot='button'], [data-sidebar='menu-button'], [data-slot='dialog-close']) {
++  border-radius: var(--radius-lg);
++}
++
++.thunderbird-panel .composer-surface {
++  background: var(--color-card);
++  /* Thunderbird's searchBox paints a 50% text-color edge over the field. */
++  border: 1px solid color-mix(in srgb, var(--color-card-foreground) 50%, var(--color-card));
++  border-radius: var(--radius-lg);
++  box-shadow: none;
++}
++
++.thunderbird-panel .composer-surface:focus-within {
++  border-color: var(--color-ring);
++  outline: 1px solid var(--color-ring);
++}
++
+ @layer base {
+   * {
+     border-color: var(--color-border);
+--- a/src/index.tsx
++++ b/src/index.tsx
+@@ -10,6 +10,8 @@
+ import { activateLocale, getActiveLocale } from './i18n'
+ import './lib/embed' // keeps the ?embed=app marker read before render, even if Header is ever lazy-loaded
+ import { installBranding } from './lib/branding'
++import { isThunderbirdPanel } from './lib/thunderbird'
++import { installThunderbirdAppearance } from './lib/thunderbird-appearance'
+ import { installFileDropNavigationPrevention } from './lib/file-drop-navigation'
+ import { markBundleEvaluated } from './lib/init-timing'
+ import { initializeLinkInterception } from './lib/intercept-links'
+@@ -28,7 +30,7 @@
+ // (the 500px min window width sits below the 640px/768px breakpoints). The
+ // class drives the sm/md variant overrides and responsive theme variables in
+ // index.css; useIsMobile (src/hooks/use-mobile.ts) handles the JS side.
+-if (isTauriDesktop()) {
++if (isTauriDesktop() || isThunderbirdPanel) {
+   document.documentElement.classList.add('force-desktop')
+ }
+
+@@ -58,12 +60,20 @@
+ // verify screen). Detect this and force a clean start at root.
+ const redirecting = handlePostUpdateRedirect()
+
+-if (!redirecting) {
++const mount = async () => {
+   initializeLinkInterception()
+   installFileDropNavigationPrevention()
+-  installBranding()
++  if (isThunderbirdPanel) {
++    await installThunderbirdAppearance()
++  } else {
++    installBranding()
++  }
+
+   const root = document.getElementById('root') as HTMLElement
+
+   ReactDOM.createRoot(root).render(<App />)
+ }
++
++if (!redirecting) {
++  void mount()
++}
+--- a/src/layout.tsx
++++ b/src/layout.tsx
+@@ -2,6 +2,8 @@
+  * License, v. 2.0. If a copy of the MPL was not distributed with this
+  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
++import { ThunderbirdWorkspace } from '@/components/thunderbird-workspace'
++import { isThunderbirdPanel } from '@/lib/thunderbird'
+ import { MobileSidebar } from '@/components/ui/mobile-sidebar'
+ import { SidebarProvider, useSidebar } from '@/components/ui/sidebar'
+ import { LazyCreateItemHost } from '@/components/create-item/lazy-create-item-host'
+@@ -15,6 +17,17 @@
+ const LayoutContent = () => {
+   const { isMobile, openMobile, setOpenMobile, notifyMobileSidebarCloseSettled } = useSidebar()
+   const { pathname } = useLocation()
++
++  if (isThunderbirdPanel) {
++    return (
++      <CreateItemProvider pathname={pathname}>
++        <ThunderbirdWorkspace>
++          <Outlet />
++        </ThunderbirdWorkspace>
++        <LazyCreateItemHost />
++      </CreateItemProvider>
++    )
++  }
+
+   return (
+     <CreateItemProvider pathname={pathname}>
+--- a/src/layout/main-layout.tsx
++++ b/src/layout/main-layout.tsx
+@@ -8,6 +8,7 @@
+ import { Dialog } from '@/components/ui/dialog'
+ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
+ import { ResponsiveModalContentComposable } from '@/components/ui/responsive-modal'
++import { isThunderbirdPanel } from '@/lib/thunderbird'
+ import { SidebarInset } from '@/components/ui/sidebar'
+ import { ActiveContentView } from '@/content-view/active-content-view'
+ import { useContentView } from '@/content-view/context'
+@@ -71,8 +72,8 @@
+                 Windows/Linux — the only drag region the window had. Putting it
+                 back unconditionally then drew an empty bar over the app on web,
+                 because everything else in the header is gated on `/chats`. */}
+-              {showsSharedHeader && <FloatingHeader />}
+-              {!isTauri() && (
++              {!isThunderbirdPanel && showsSharedHeader && <FloatingHeader />}
++              {!isThunderbirdPanel && !isTauri() && (
+                 <>
+                   <DownloadAppBannerMobile />
+                   <DownloadAppBannerDesktop />
+--- a/src/layout/sidebar/chat-list-item.tsx
++++ b/src/layout/sidebar/chat-list-item.tsx
+@@ -184,7 +184,7 @@
+     // than one per row, and it needs the database context that a row does not.
+     const startMove = () => {
+       isOpeningDialogRef.current = true
+-      onMoveToProject(thread.id, thread.projectId ?? null)
++      onMoveToProject?.(thread.id, thread.projectId ?? null)
+     }
+     const startDelete = () => {
+       isOpeningDialogRef.current = true
+--- a/src/layout/sidebar/index.tsx
++++ b/src/layout/sidebar/index.tsx
+@@ -21,6 +21,9 @@
+ import { useQuery } from '@powersync/tanstack-react-query'
+ import { useCallback, useMemo, useRef } from 'react'
+ import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
++import { Trans } from '@lingui/react/macro'
++import { isThunderbirdPanel } from '@/lib/thunderbird'
++import { ChatList } from './chat-list'
+ import { ChatSidebarContent } from './chat-sidebar'
+ import { SettingsSidebarContent } from './settings-sidebar'
+ import { useSidebarSection } from './use-sidebar-section'
+@@ -29,7 +32,8 @@
+ /**
+  * Main sidebar component that orchestrates between chat and settings sidebars
+  */
+-export default function Sidebar() {
++export default function Sidebar({ onThreadSelected }: { onThreadSelected?: () => void } = {}) {
++  const historyScrollRef = useRef<HTMLDivElement>(null)
+   const db = useDatabase()
+   const navigate = useNavigate()
+   const location = useLocation()
+@@ -138,12 +142,46 @@
+       // A chat that came from an app opens inside it, not at `/chats/:id` —
+       // see `useChatDestination` for when that isn't possible.
+       void navigateAndCloseSidebar(chatDestination(threadId, miniAppId))
+-    },
+-    [chatDestination, navigateAndCloseSidebar],
++      onThreadSelected?.()
++    },
++    [chatDestination, navigateAndCloseSidebar, onThreadSelected],
+   )
+
+   const handleNavigate = (path: string) => {
+     void navigateAndCloseSidebar(path)
++  }
++
++  if (isThunderbirdPanel) {
++    return (
++      <div className="tb-history-scroll" ref={historyScrollRef}>
++        {!chatThreads.length && (
++          <div className="tb-empty-history">
++            <h2>
++              <Trans>Recents</Trans>
++            </h2>
++            <p>
++              <Trans>No chats yet</Trans>
++            </p>
++          </div>
++        )}
++        <ChatList
++          isCollapsed={false}
++          isMobile={false}
++          chatThreads={chatThreads}
++          currentChatThreadId={currentChatThreadId}
++          deleteAllChatsMutation={deleteAllChatsMutation}
++          deleteChatMutation={deleteChatMutation}
++          deleteAllChatsDialogRef={deleteAllChatsDialogRef}
++          deleteChatDialogRef={deleteChatDialogRef}
++          threadIdRef={threadIdRef}
++          mobileNavToggle={null}
++          mobileSecondaryNavigation={null}
++          onChatClick={handleChatClick}
++          onRename={handleRename}
++          scrollRef={historyScrollRef}
++        />
++      </div>
++    )
+   }
+
+   return (
+--- a/src/layout/sidebar/recent-chats-menu.tsx
++++ b/src/layout/sidebar/recent-chats-menu.tsx
+@@ -15,6 +15,7 @@
+ } from '@/components/ui/dropdown-menu'
+ import { SidebarMenuButton } from '@/components/ui/sidebar'
+ import { useCreateNewChat } from '@/hooks/use-create-new-chat'
++import { isThunderbirdPanel } from '@/lib/thunderbird'
+ import { ChatMenuItems } from './chat-menu-items'
+ import { recentChatsPreviewCount } from './use-sidebar-preview-state'
+ import type { ChatListProps } from './types'
+@@ -37,9 +38,17 @@
+     <DropdownMenu modal={false}>
+       <DropdownMenuTrigger asChild>
+         <SidebarMenuButton
+-          tooltip={t`Recents`}
++          tooltip={isThunderbirdPanel ? undefined : t`Recents`}
++          title={isThunderbirdPanel ? t`Recents` : undefined}
+           aria-label={t`Recents`}
+           isActive={chatThreads.some((thread) => thread.id === currentChatThreadId)}
++          onMouseDown={(event) => {
++            // Gecko can focus the trigger on mousedown after Radix has moved focus
++            // to the menu on pointerdown. That outside focus immediately dismisses it.
++            if (isThunderbirdPanel && event.button === 0 && !event.ctrlKey) {
++              event.preventDefault()
++            }
++          }}
+         >
+           <MessageCircle />
+         </SidebarMenuButton>
+--- a/src/layout/sidebar/sidebar-header-actions.tsx
++++ b/src/layout/sidebar/sidebar-header-actions.tsx
+@@ -3,12 +3,14 @@
+  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+ import { useLingui } from '@lingui/react/macro'
+-import { Search } from 'lucide-react'
++import { Search, Settings } from 'lucide-react'
+ import type { ReactNode } from 'react'
+ import { Button, mutedIconButtonClass } from '@/components/ui/button'
+ import { cn } from '@/lib/utils'
+ import { useIsMobile } from '@/hooks/use-mobile'
+ import { SidebarMenuButton } from '@/components/ui/sidebar'
++import { ThunderbirdSettingsDialog } from '@/components/chat/thunderbird-settings-dialog'
++import { isThunderbirdPanel } from '@/lib/thunderbird'
+
+ /** Keep global search with the section tabs in both sidebar views. */
+ export const SidebarHeaderActions = ({
+@@ -22,19 +24,32 @@
+ }) => {
+   const { t } = useLingui()
+   const { isMobile } = useIsMobile()
++  const panelSettings = isThunderbirdPanel && (
++    <ThunderbirdSettingsDialog>
++      <SidebarMenuButton
++        aria-label={t`Settings`}
++        title={t`Settings`}
++        data-testid="thunderbird-settings"
++        className="size-8 justify-center cursor-pointer"
++      >
++        <Settings />
++      </SidebarMenuButton>
++    </ThunderbirdSettingsDialog>
++  )
+   if (vertical) {
+     return (
+       <div className="mb-2 flex flex-col gap-4">
+-        {onSearchClick && (
+-          <SidebarMenuButton
+-            onClick={onSearchClick}
+-            tooltip={t`Search`}
+-            aria-label={t`Search`}
+-            className="cursor-pointer"
+-          >
+-            <Search />
+-          </SidebarMenuButton>
+-        )}
++        {panelSettings ||
++          (onSearchClick && (
++            <SidebarMenuButton
++              onClick={onSearchClick}
++              tooltip={t`Search`}
++              aria-label={t`Search`}
++              className="cursor-pointer"
++            >
++              <Search />
++            </SidebarMenuButton>
++          ))}
+         {children}
+       </div>
+     )
+@@ -48,17 +63,18 @@
+       )}
+     >
+       {isMobile && children}
+-      {onSearchClick && (
+-        <Button
+-          variant="ghost"
+-          size="icon"
+-          className={mutedIconButtonClass}
+-          aria-label={t`Search`}
+-          onClick={onSearchClick}
+-        >
+-          <Search />
+-        </Button>
+-      )}
++      {panelSettings ||
++        (onSearchClick && (
++          <Button
++            variant="ghost"
++            size="icon"
++            className={mutedIconButtonClass}
++            aria-label={t`Search`}
++            onClick={onSearchClick}
++          >
++            <Search />
++          </Button>
++        ))}
+       {!isMobile && children}
+     </div>
+   )
+--- a/src/layout/sidebar/types.ts
++++ b/src/layout/sidebar/types.ts
+@@ -44,7 +44,7 @@
+   onChatClick: (threadId: string, miniAppId: string | null) => void
+   onRename: (threadId: string, title: string) => void
+   /** Open the project picker for a chat. The sidebar owns the dialog. */
+-  onMoveToProject: (threadId: string, currentProjectId: string | null) => void
++  onMoveToProject?: (threadId: string, currentProjectId: string | null) => void
+ }
+
+ export type ChatListItemProps = {
+@@ -56,5 +56,5 @@
+   deleteChatDialogRef: RefObject<DeleteChatDialogRef | null>
+   onChatClick: (threadId: string, miniAppId: string | null) => void
+   onRename: (threadId: string, title: string) => void
+-  onMoveToProject: (threadId: string, currentProjectId: string | null) => void
++  onMoveToProject?: (threadId: string, currentProjectId: string | null) => void
+ }
+--- a/src/lib/branding.test.ts
++++ b/src/lib/branding.test.ts
+@@ -271,6 +271,13 @@
+     useConfigStore.setState({ config: {} })
+   })
+
++  it('preserves the native conversation title on a Thunderbird appearance change', () => {
++    document.title = 'Garden plans — Thunderbolt'
++    applyBranding({ cssVars: { theme: { radius: '1.25rem' } } }, { updateTitle: false })
++    expect(document.title).toBe('Garden plans — Thunderbolt')
++    expect(document.getElementById('branding')?.textContent).toContain('--radius-scale: 2')
++  })
++
+   it('writes the stylesheet and the title, and restores both on reset', () => {
+     applyBranding({ appName: 'Acme AI', cssVars: { theme: { radius: '1.25rem' } } })
+     expect(document.getElementById('branding')?.textContent).toBe('html:root { --radius-scale: 2; }')
+--- a/src/lib/branding.ts
++++ b/src/lib/branding.ts
+@@ -279,13 +279,16 @@
+  * the html background and `theme-color` meta that mirror `--color-background`.
+  *
+  * @param branding - Validated branding, or undefined to restore the defaults.
+- */
+-export const applyBranding = (branding: PublicBranding | undefined) => {
++ * @param options - A document with its own title can opt out of the application title.
++ */
++export const applyBranding = (branding: PublicBranding | undefined, options = { updateTitle: true }) => {
+   const existing = document.getElementById(styleElementId)
+   const style =
+     existing ?? document.head.appendChild(Object.assign(document.createElement('style'), { id: styleElementId }))
+   style.textContent = buildBrandingCss(branding)
+-  document.title = resolveAppName(branding)
++  if (options.updateTitle) {
++    document.title = resolveAppName(branding)
++  }
+   syncDocumentBackground()
+ }
+
+--- a/src/lib/fs.ts
++++ b/src/lib/fs.ts
+@@ -7,9 +7,15 @@
+ import { deleteIndexedDbDatabase, isOpfsAvailable, isTauri, powerSyncDbFilename } from './platform'
+ import { withDeadline, withTimeout } from './timeout'
+ import { createSerialQueue } from './serial-queue'
++import { isThunderbirdPanel } from './thunderbird'
+
+-/** Boot and destructive reset share the same files and must never overlap. */
+-export const runAppStorageOperation = createSerialQueue()
++const queueStorageOperation = createSerialQueue()
++
++/** Coordinate startup and reset across chat tabs that share a Thunderbird profile. */
++export const runAppStorageOperation = <T>(operation: () => Promise<T>): Promise<T> =>
++  queueStorageOperation(() =>
++    isThunderbirdPanel ? navigator.locks.request('thunderbolt-space-startup', operation) : operation(),
++  )
+
+ /**
+  * Creates app data directory in Tauri environment using file system
+--- a/src/lib/mcp-provider.tsx
++++ b/src/lib/mcp-provider.tsx
+@@ -24,7 +24,7 @@
+   id: string
+   name: string
+   url: string
+-  type: MCPTransportType
++  type: MCPTransportType | 'thunderbird'
+   enabled: boolean
+ }
+
+@@ -125,15 +125,21 @@
+     setServers(serversRef.current)
+   }
+
+-  const defaultCreateClient: CreateClientFn = async (serverId, url, type) => {
++  const createClient = async (server: MCPServer): Promise<MCPClient> => {
++    if (server.type === 'thunderbird') {
++      const { connectThunderbirdMcp } = await import('./thunderbird-mcp-client')
++      return connectThunderbirdMcp()
++    }
++    const { id: serverId, type, url } = server
++    if (injectedCreateClient) {
++      return injectedCreateClient(serverId, url, type)
++    }
+     // The provider mounts for every chat, but the SDK, transports and OAuth
+     // runtime are only needed once an enabled MCP server actually connects.
+     const { connectMcpClient } = await import('./mcp-client')
+     return connectMcpClient({ db, httpClient, serverId, url, type, cloudUrl })
+   }
+
+-  const createClient = injectedCreateClient ?? defaultCreateClient
+-
+   /** Cache a freshly connected client and maintain the client→serverId reverse lookup. */
+   const cacheClient = (serverId: string, client: MCPClient) => {
+     clientRefs.current.set(serverId, client)
+@@ -144,7 +150,7 @@
+    *  client that lands after the deadline is closed rather than left open; a
+    *  late failure needs nothing, the deadline already reported it. */
+   const connectWithDeadline = async (server: MCPServer): Promise<MCPClient> => {
+-    const connecting = createClient(server.id, server.url, server.type)
++    const connecting = createClient(server)
+     try {
+       return await withDeadline(
+         connecting,
+--- a/src/lib/pick-defaults.ts
++++ b/src/lib/pick-defaults.ts
+@@ -9,6 +9,8 @@
+   type ImageSupport,
+   type SharedModel,
+ } from '@shared/defaults/models'
++import { isThunderbirdPanel } from './thunderbird'
++import { thunderbirdModel } from '@/providers/thunderbird-model'
+
+ export type ModelsDefaults = {
+   version: number
+@@ -40,6 +42,13 @@
+  *     wholesale.
+  */
+ export const pickModelsDefaults = (server: ServerModelsDefaults | undefined): ModelsDefaults => {
++  if (isThunderbirdPanel) {
++    return {
++      version: defaultModelsVersion,
++      data: [thunderbirdModel],
++      imageSupport: { [thunderbirdModel.id]: defaultModelImageSupport[thunderbirdModel.id] },
++    }
++  }
+   if (
+     server &&
+     Number.isFinite(server.version) &&
+--- a/src/lib/posthog.tsx
++++ b/src/lib/posthog.tsx
+@@ -8,6 +8,7 @@
+ import { getPowerSyncInstance } from '@/db/powersync/sync-state'
+ import { getLocalSetting } from '@/stores/local-settings-store'
+ import { createHandleError } from '@/lib/error-utils'
++import { isThunderbirdPanel } from './thunderbird'
+ import { createClient } from '@/lib/http'
+ import type { HandleError, HandleResult } from '@/types/handle-errors'
+ import type { PostHog } from 'posthog-js'
+@@ -175,6 +176,10 @@
+  * @param httpClient - Optional HTTP client for dependency injection.
+  */
+ export const initPosthog = async (httpClient?: HttpClient): Promise<HandleResult<PostHog | null>> => {
++  // The embedded panel has no independent data-collection preference.
++  if (isThunderbirdPanel) {
++    return { success: true, data: null }
++  }
+   try {
+     // Discard the account ID retained by older promotion-analytics builds.
+     sessionStorage.removeItem('thunderbolt_pending_anon_id')
+--- a/src/lib/theme-provider.tsx
++++ b/src/lib/theme-provider.tsx
+@@ -10,6 +10,7 @@
+ import { selectBranding } from './branding-selectors'
+ import { syncDocumentBackground } from './document-background'
+ import { isMacDesktop, isTauri } from './platform'
++import { useThunderbirdAppearance } from './thunderbird'
+ import { setAndroidBarColor } from './set-android-bar-color'
+
+ /** Sync native UI (keyboard, system controls) with the resolved theme on iOS. */
+@@ -110,7 +111,8 @@
+   // A user who never picked a theme follows the operator's default, then the OS.
+   const chosenTheme = useLocalSettingsStore((s) => s.theme)
+   const defaultTheme = useConfigStore((s) => selectBranding(s.config)?.defaultThemeMode)
+-  const theme = chosenTheme ?? defaultTheme ?? 'system'
++  const hostTheme = useThunderbirdAppearance((state) => state.mode)
++  const theme = hostTheme ?? chosenTheme ?? defaultTheme ?? 'system'
+   const setLocalSetting = useLocalSettingsStore((s) => s.setLocalSetting)
+
+   const setTheme = useCallback((newTheme: Theme) => setLocalSetting('theme', newTheme), [setLocalSetting])
+--- a/src/locales/de/messages.po
++++ b/src/locales/de/messages.po
+@@ -98,6 +98,10 @@
+ msgid "{appName} will use it across the app. You can change it later in Preferences."
+ msgstr "{appName} verwendet sie in der gesamten App. Sie können sie später in den Einstellungen ändern."
+
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
++msgid "{conversation} — Thunderbolt"
++msgstr "{conversation} — Thunderbolt"
++
+ #. js-lingui:icu=%7Bcount%2C+plural%2C+one+%7B%23+chat%7D+other+%7B%23+chats%7D%7D&pluralize_on=count
+ #: src/projects/index.tsx
+ #~ msgid "# chat"
+@@ -341,6 +345,10 @@
+ #: src/components/chat/chat-skills-bar.tsx
+ msgid "Add a skill"
+ msgstr "Skill hinzufügen"
++
++#: src/components/chat/thunderbird-settings-dialog.tsx
++msgid "Add a Tinfoil API key to send messages."
++msgstr "Füge einen Tinfoil-API-Schlüssel hinzu, um Nachrichten zu senden."
+
+ #: src/components/create-item/context.tsx
+ #: src/components/settings/agents/add-custom-agent-form.tsx
+@@ -670,12 +678,16 @@
+ msgstr ""
+
+ #: src/components/chat/chat-prompt-input.tsx
++msgid "Ask about your workspace…"
++msgstr "Stelle eine Frage zu deinem Arbeitsbereich…"
++
++#: src/components/chat/chat-prompt-input.tsx
+ msgid "Ask me anything…"
+ msgstr "Fragen Sie mich etwas…"
+
+ #: src/components/context-usage/retained-context-message.tsx
+ msgid "Assistant"
+-msgstr ""
++msgstr "Assistent"
+
+ #: src/components/sync-enable-warning-dialog.tsx
+ msgid "At this time, synced data is not encrypted. Enabling sync will store your data on our servers without encryption. Do you want to continue?"
+@@ -838,6 +850,10 @@
+ msgid "Cannot change agent during reply"
+ msgstr "Der Agent kann während einer Antwort nicht gewechselt werden"
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Catch up on mail"
++msgstr "E-Mails überblicken"
++
+ #: src/i18n/unit-labels.ts
+ #: src/widgets/weather-forecast/display.tsx
+ msgid "Celsius"
+@@ -876,9 +892,17 @@
+ msgid "Chat actions"
+ msgstr "Chat-Aktionen"
+
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
++msgid "Chat history"
++msgstr "Chatverlauf"
++
+ #: src/layout/sidebar/rename-chat-dialog.tsx
+ msgid "Chat name"
+ msgstr "Chat-Name"
++
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
++msgid "Chat navigation"
++msgstr "Chat-Navigation"
+
+ #: src/providers/chatgpt-registration.ts
+ #~ msgid "ChatGPT account"
+@@ -1068,6 +1092,7 @@
+ msgid "Clear Local Database?"
+ msgstr "Lokale Datenbank löschen?"
+
++#: src/components/chat/thunderbird-api-key.tsx
+ #: src/settings/models/edit-model-form.tsx
+ msgid "Clear saved API key"
+ msgstr "Gespeicherten API-Schlüssel löschen"
+@@ -1333,6 +1358,10 @@
+ #: src/settings/models/add-provider-models.tsx
+ msgid "Connect this provider on this device to add models."
+ msgstr ""
++
++#: src/components/chat/thunderbird-settings-dialog.tsx
++msgid "Connect Tinfoil"
++msgstr "Tinfoil verbinden"
+
+ #: src/components/server-connection/server-connection-form.tsx
+ msgid "Connect to server"
+@@ -2528,6 +2557,10 @@
+ msgid "Downloading…"
+ msgstr "Wird heruntergeladen…"
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Draft a reply"
++msgstr "Antwort entwerfen"
++
+ #: src/layout/sidebar/project-drop-row.tsx
+ msgid "Drop"
+ msgstr "Ablegen"
+@@ -2713,6 +2746,10 @@
+ msgid "Enter a model ID"
+ msgstr ""
+
++#: src/components/chat/thunderbird-api-key.tsx
++msgid "Enter a replacement API key"
++msgstr "Neuen API-Schlüssel eingeben"
++
+ #: src/components/otari-connection/use-otari-connection-state.ts
+ msgid "Enter a valid HTTPS server URL, or an HTTP localhost URL for local development."
+ msgstr ""
+@@ -2753,9 +2790,10 @@
+ msgid "Enter this fingerprint on your trusted device before approving."
+ msgstr "Geben Sie diesen Fingerabdruck auf Ihrem vertrauenswürdigen Gerät ein, bevor Sie genehmigen."
+
++#: src/components/chat/thunderbird-api-key.tsx
+ #: src/components/search-provider-setup/search-provider-setup.tsx
+ msgid "Enter your API key"
+-msgstr ""
++msgstr "Geben Sie Ihren API-Schlüssel ein"
+
+ #: src/components/sign-in-modal.tsx
+ msgid "Enter your code"
+@@ -2898,9 +2936,10 @@
+ msgid "Failed to reset the model."
+ msgstr ""
+
++#: src/components/chat/thunderbird-api-key.tsx
+ #: src/settings/models/use-models-page-state.ts
+ msgid "Failed to save the model."
+-msgstr ""
++msgstr "Das Modell konnte nicht gespeichert werden."
+
+ #: src/hooks/use-sync-setup.ts
+ #: src/settings/account/use-delete-account.ts
+@@ -3090,6 +3129,10 @@
+ msgid "Help make {appName} better."
+ msgstr ""
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Help me draft a reply to an email. Ask me which message to use."
++msgstr "Hilf mir, eine Antwort auf eine E-Mail zu entwerfen. Frag mich, auf welche Nachricht ich antworten möchte."
++
+ #: src/settings/preferences.tsx
+ msgid "Help us improve the app by sending anonymous usage info such as crashes, performance, and usage. Read more about our <0>privacy policy</0>."
+ msgstr "Helfen Sie uns, die App zu verbessern, indem Sie anonyme Nutzungsdaten wie Abstürze, Leistung und Nutzung senden. Mehr dazu in unserer <0>Datenschutzerklärung</0>."
+@@ -3431,6 +3474,7 @@
+ msgstr "Kopplungsidentität dieser App wird geladen…"
+
+ #: src/components/chat/chat-ui.tsx
++#: src/components/chat/thunderbird-settings-dialog.tsx
+ #: src/components/device-approval.tsx
+ #: src/components/sidebar-footer.tsx
+ #: src/widgets/connect-integration/widget.tsx
+@@ -3470,6 +3514,10 @@
+ #: src/components/logout-modal.tsx
+ msgid "Logging out…"
+ msgstr "Abmeldung…"
++
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Look at my calendar and tasks for today. What should I prepare for?"
++msgstr "Sieh dir meinen Kalender und meine Aufgaben für heute an. Worauf sollte ich mich vorbereiten?"
+
+ #: src/components/chat/effort-selector/use-effort-selector-state.ts
+ msgid "Low"
+@@ -3720,6 +3768,7 @@
+ msgid "New Agent"
+ msgstr "Neuer Agent"
+
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
+ #: src/layout/sidebar/chat-list.tsx
+ #: src/layout/sidebar/recent-chats-menu.tsx
+ #: src/mini-apps/mini-app-chat-history.tsx
+@@ -3791,6 +3840,7 @@
+
+ #: src/layout/sidebar/chat-list.tsx
+ #: src/layout/sidebar/chat-menu-items.tsx
++#: src/layout/sidebar/index.tsx
+ msgid "No chats yet"
+ msgstr "Noch keine Chats"
+
+@@ -3874,7 +3924,7 @@
+
+ #: src/components/otari-connection/otari-connection.tsx
+ msgid "No models available yet"
+-msgstr ""
++msgstr "Noch keine Modelle verfügbar"
+
+ #: src/settings/models/models-list.tsx
+ msgid "No models configured"
+@@ -4372,6 +4422,10 @@
+ msgid "Pinned skill {label}"
+ msgstr "Angepinnter Skill {label}"
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Plan my day"
++msgstr "Meinen Tag planen"
++
+ #: src/voice/speakable.ts
+ msgid "Please choose one of the options on screen."
+ msgstr "Bitte wählen Sie eine der Optionen auf dem Bildschirm."
+@@ -4478,6 +4532,11 @@
+ msgid "Provider"
+ msgstr "Anbieter"
+
++#: src/components/chat/thunderbird-settings-dialog.tsx
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
++msgid "Provider settings"
++msgstr "Anbietereinstellungen"
++
+ #: src/settings/preferences.tsx
+ msgid "Proxying is required in the web app to bypass browser CORS restrictions."
+ msgstr "In der Web-App ist ein Proxy erforderlich, um CORS-Einschränkungen des Browsers zu umgehen."
+@@ -4552,6 +4611,7 @@
+ #~ msgstr "Letzte Projekte"
+
+ #: src/layout/sidebar/chat-list.tsx
++#: src/layout/sidebar/index.tsx
+ #: src/layout/sidebar/recent-chats-menu.tsx
+ msgid "Recents"
+ msgstr ""
+@@ -4829,6 +4889,7 @@
+ msgid "Run this on the machine hosting the bridge, then add it — the connection is verified on first use."
+ msgstr "Führen Sie dies auf dem Rechner aus, der die Bridge hostet, und fügen Sie sie dann hinzu – die Verbindung wird bei der ersten Nutzung verifiziert."
+
++#: src/components/chat/thunderbird-api-key.tsx
+ #: src/components/set-node-id-dialog.tsx
+ #: src/components/settings/agents/editable-field.tsx
+ #: src/layout/sidebar/rename-chat-dialog.tsx
+@@ -5195,6 +5256,7 @@
+
+ #: src/layout/sidebar/nav-toggle.tsx
+ #: src/layout/sidebar/settings-sidebar.tsx
++#: src/layout/sidebar/sidebar-header-actions.tsx
+ msgid "Settings"
+ msgstr "Einstellungen"
+
+@@ -5555,6 +5617,14 @@
+ msgid "Suggested"
+ msgstr "Vorschläge"
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Suggested prompts"
++msgstr "Vorgeschlagene Fragen"
++
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Summarize the unread messages in my inbox and highlight anything that needs a reply."
++msgstr "Fasse die ungelesenen Nachrichten in meinem Posteingang zusammen und hebe hervor, welche eine Antwort benötigen."
++
+ #: src/components/context-usage/retained-context-message.tsx
+ msgid "Summary"
+ msgstr ""
+@@ -6258,6 +6328,10 @@
+ #: src/components/onboarding/onboarding-model-step.tsx
+ msgid "Tinfoil"
+ msgstr ""
++
++#: src/components/chat/thunderbird-api-key.tsx
++msgid "Tinfoil API key"
++msgstr "Tinfoil-API-Schlüssel"
+
+ #: src/integrations/tinfoil-search/api.ts
+ msgid "Tinfoil could not retrieve this page."
+@@ -6993,6 +7067,10 @@
+ msgid "word1 word2 word3 ..."
+ msgstr "wort1 wort2 wort3 ..."
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Work with your mail, calendar, and contacts in Thunderbird."
++msgstr "Arbeite mit deinen E-Mails, deinem Kalender und deinen Kontakten in Thunderbird."
++
+ #: src/settings/preferences.tsx
+ msgid "Would you like to change the language to {suggestedLanguageLabel}?"
+ msgstr "Möchten Sie die Sprache auf {suggestedLanguageLabel} umstellen?"
+@@ -7015,7 +7093,7 @@
+
+ #: src/components/context-usage/retained-context-message.tsx
+ msgid "You"
+-msgstr ""
++msgstr "Sie"
+
+ #: src/components/sign-in/sign-in-otp-step.tsx
+ msgid "You appear to be using a <0>localhost</0> backend. Check your backend server logs for the code or magic link."
+@@ -7214,6 +7292,10 @@
+ msgid "Your encryption was upgraded and a new 24-word recovery phrase was generated. Write it down in order and store it somewhere safe. This phrase won't be shown again."
+ msgstr ""
+
++#: src/components/chat/thunderbird-settings-dialog.tsx
++msgid "Your key is saved in this Thunderbird profile."
++msgstr "Ihr Schlüssel wird in diesem Thunderbird-Profil gespeichert."
++
+ #: src/components/onboarding/onboarding-server-step.tsx
+ msgid "Your local data stays on this device until you enable sync."
+ msgstr ""
+--- a/src/locales/en-XA/messages.po
++++ b/src/locales/en-XA/messages.po
+@@ -98,6 +98,10 @@
+ msgid "{appName} will use it across the app. You can change it later in Preferences."
+ msgstr ""
+
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
++msgid "{conversation} — Thunderbolt"
++msgstr ""
++
+ #. js-lingui:icu=%7Bcount%2C+plural%2C+one+%7B%23+chat%7D+other+%7B%23+chats%7D%7D&pluralize_on=count
+ #: src/projects/index.tsx
+ #~ msgid "# chat"
+@@ -340,6 +344,10 @@
+
+ #: src/components/chat/chat-skills-bar.tsx
+ msgid "Add a skill"
++msgstr ""
++
++#: src/components/chat/thunderbird-settings-dialog.tsx
++msgid "Add a Tinfoil API key to send messages."
+ msgstr ""
+
+ #: src/components/create-item/context.tsx
+@@ -667,6 +675,10 @@
+
+ #: src/components/embedded/selection-popover.tsx
+ msgid "Ask about this"
++msgstr ""
++
++#: src/components/chat/chat-prompt-input.tsx
++msgid "Ask about your workspace…"
+ msgstr ""
+
+ #: src/components/chat/chat-prompt-input.tsx
+@@ -838,6 +850,10 @@
+ msgid "Cannot change agent during reply"
+ msgstr ""
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Catch up on mail"
++msgstr ""
++
+ #: src/i18n/unit-labels.ts
+ #: src/widgets/weather-forecast/display.tsx
+ msgid "Celsius"
+@@ -876,8 +892,16 @@
+ msgid "Chat actions"
+ msgstr ""
+
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
++msgid "Chat history"
++msgstr ""
++
+ #: src/layout/sidebar/rename-chat-dialog.tsx
+ msgid "Chat name"
++msgstr ""
++
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
++msgid "Chat navigation"
+ msgstr ""
+
+ #: src/providers/chatgpt-registration.ts
+@@ -1068,6 +1092,7 @@
+ msgid "Clear Local Database?"
+ msgstr ""
+
++#: src/components/chat/thunderbird-api-key.tsx
+ #: src/settings/models/edit-model-form.tsx
+ msgid "Clear saved API key"
+ msgstr ""
+@@ -1332,6 +1357,10 @@
+
+ #: src/settings/models/add-provider-models.tsx
+ msgid "Connect this provider on this device to add models."
++msgstr ""
++
++#: src/components/chat/thunderbird-settings-dialog.tsx
++msgid "Connect Tinfoil"
+ msgstr ""
+
+ #: src/components/server-connection/server-connection-form.tsx
+@@ -2528,6 +2557,10 @@
+ msgid "Downloading…"
+ msgstr ""
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Draft a reply"
++msgstr ""
++
+ #: src/layout/sidebar/project-drop-row.tsx
+ msgid "Drop"
+ msgstr ""
+@@ -2713,6 +2746,10 @@
+ msgid "Enter a model ID"
+ msgstr ""
+
++#: src/components/chat/thunderbird-api-key.tsx
++msgid "Enter a replacement API key"
++msgstr ""
++
+ #: src/components/otari-connection/use-otari-connection-state.ts
+ msgid "Enter a valid HTTPS server URL, or an HTTP localhost URL for local development."
+ msgstr ""
+@@ -2753,6 +2790,7 @@
+ msgid "Enter this fingerprint on your trusted device before approving."
+ msgstr ""
+
++#: src/components/chat/thunderbird-api-key.tsx
+ #: src/components/search-provider-setup/search-provider-setup.tsx
+ msgid "Enter your API key"
+ msgstr ""
+@@ -2898,6 +2936,7 @@
+ msgid "Failed to reset the model."
+ msgstr ""
+
++#: src/components/chat/thunderbird-api-key.tsx
+ #: src/settings/models/use-models-page-state.ts
+ msgid "Failed to save the model."
+ msgstr ""
+@@ -3090,6 +3129,10 @@
+ msgid "Help make {appName} better."
+ msgstr ""
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Help me draft a reply to an email. Ask me which message to use."
++msgstr ""
++
+ #: src/settings/preferences.tsx
+ msgid "Help us improve the app by sending anonymous usage info such as crashes, performance, and usage. Read more about our <0>privacy policy</0>."
+ msgstr ""
+@@ -3431,6 +3474,7 @@
+ msgstr ""
+
+ #: src/components/chat/chat-ui.tsx
++#: src/components/chat/thunderbird-settings-dialog.tsx
+ #: src/components/device-approval.tsx
+ #: src/components/sidebar-footer.tsx
+ #: src/widgets/connect-integration/widget.tsx
+@@ -3469,6 +3513,10 @@
+
+ #: src/components/logout-modal.tsx
+ msgid "Logging out…"
++msgstr ""
++
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Look at my calendar and tasks for today. What should I prepare for?"
+ msgstr ""
+
+ #: src/components/chat/effort-selector/use-effort-selector-state.ts
+@@ -3720,6 +3768,7 @@
+ msgid "New Agent"
+ msgstr ""
+
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
+ #: src/layout/sidebar/chat-list.tsx
+ #: src/layout/sidebar/recent-chats-menu.tsx
+ #: src/mini-apps/mini-app-chat-history.tsx
+@@ -3791,6 +3840,7 @@
+
+ #: src/layout/sidebar/chat-list.tsx
+ #: src/layout/sidebar/chat-menu-items.tsx
++#: src/layout/sidebar/index.tsx
+ msgid "No chats yet"
+ msgstr ""
+
+@@ -4372,6 +4422,10 @@
+ msgid "Pinned skill {label}"
+ msgstr ""
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Plan my day"
++msgstr ""
++
+ #: src/voice/speakable.ts
+ msgid "Please choose one of the options on screen."
+ msgstr ""
+@@ -4478,6 +4532,11 @@
+ msgid "Provider"
+ msgstr ""
+
++#: src/components/chat/thunderbird-settings-dialog.tsx
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
++msgid "Provider settings"
++msgstr ""
++
+ #: src/settings/preferences.tsx
+ msgid "Proxying is required in the web app to bypass browser CORS restrictions."
+ msgstr ""
+@@ -4552,6 +4611,7 @@
+ #~ msgstr ""
+
+ #: src/layout/sidebar/chat-list.tsx
++#: src/layout/sidebar/index.tsx
+ #: src/layout/sidebar/recent-chats-menu.tsx
+ msgid "Recents"
+ msgstr ""
+@@ -4829,6 +4889,7 @@
+ msgid "Run this on the machine hosting the bridge, then add it — the connection is verified on first use."
+ msgstr ""
+
++#: src/components/chat/thunderbird-api-key.tsx
+ #: src/components/set-node-id-dialog.tsx
+ #: src/components/settings/agents/editable-field.tsx
+ #: src/layout/sidebar/rename-chat-dialog.tsx
+@@ -5195,6 +5256,7 @@
+
+ #: src/layout/sidebar/nav-toggle.tsx
+ #: src/layout/sidebar/settings-sidebar.tsx
++#: src/layout/sidebar/sidebar-header-actions.tsx
+ msgid "Settings"
+ msgstr ""
+
+@@ -5555,6 +5617,14 @@
+ msgid "Suggested"
+ msgstr ""
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Suggested prompts"
++msgstr ""
++
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Summarize the unread messages in my inbox and highlight anything that needs a reply."
++msgstr ""
++
+ #: src/components/context-usage/retained-context-message.tsx
+ msgid "Summary"
+ msgstr ""
+@@ -6257,6 +6327,10 @@
+
+ #: src/components/onboarding/onboarding-model-step.tsx
+ msgid "Tinfoil"
++msgstr ""
++
++#: src/components/chat/thunderbird-api-key.tsx
++msgid "Tinfoil API key"
+ msgstr ""
+
+ #: src/integrations/tinfoil-search/api.ts
+@@ -6993,6 +7067,10 @@
+ msgid "word1 word2 word3 ..."
+ msgstr ""
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Work with your mail, calendar, and contacts in Thunderbird."
++msgstr ""
++
+ #: src/settings/preferences.tsx
+ msgid "Would you like to change the language to {suggestedLanguageLabel}?"
+ msgstr ""
+@@ -7214,6 +7292,10 @@
+ msgid "Your encryption was upgraded and a new 24-word recovery phrase was generated. Write it down in order and store it somewhere safe. This phrase won't be shown again."
+ msgstr ""
+
++#: src/components/chat/thunderbird-settings-dialog.tsx
++msgid "Your key is saved in this Thunderbird profile."
++msgstr ""
++
+ #: src/components/onboarding/onboarding-server-step.tsx
+ msgid "Your local data stays on this device until you enable sync."
+ msgstr ""
+--- a/src/locales/en/messages.po
++++ b/src/locales/en/messages.po
+@@ -98,6 +98,10 @@
+ msgid "{appName} will use it across the app. You can change it later in Preferences."
+ msgstr "{appName} will use it across the app. You can change it later in Preferences."
+
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
++msgid "{conversation} — Thunderbolt"
++msgstr "{conversation} — Thunderbolt"
++
+ #. js-lingui:icu=%7Bcount%2C+plural%2C+one+%7B%23+chat%7D+other+%7B%23+chats%7D%7D&pluralize_on=count
+ #: src/projects/index.tsx
+ #~ msgid "# chat"
+@@ -341,6 +345,10 @@
+ #: src/components/chat/chat-skills-bar.tsx
+ msgid "Add a skill"
+ msgstr "Add a skill"
++
++#: src/components/chat/thunderbird-settings-dialog.tsx
++msgid "Add a Tinfoil API key to send messages."
++msgstr "Add a Tinfoil API key to send messages."
+
+ #: src/components/create-item/context.tsx
+ #: src/components/settings/agents/add-custom-agent-form.tsx
+@@ -668,6 +676,10 @@
+ #: src/components/embedded/selection-popover.tsx
+ msgid "Ask about this"
+ msgstr "Ask about this"
++
++#: src/components/chat/chat-prompt-input.tsx
++msgid "Ask about your workspace…"
++msgstr "Ask about your workspace…"
+
+ #: src/components/chat/chat-prompt-input.tsx
+ msgid "Ask me anything…"
+@@ -838,6 +850,10 @@
+ msgid "Cannot change agent during reply"
+ msgstr "Cannot change agent during reply"
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Catch up on mail"
++msgstr "Catch up on mail"
++
+ #: src/i18n/unit-labels.ts
+ #: src/widgets/weather-forecast/display.tsx
+ msgid "Celsius"
+@@ -876,9 +892,17 @@
+ msgid "Chat actions"
+ msgstr "Chat actions"
+
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
++msgid "Chat history"
++msgstr "Chat history"
++
+ #: src/layout/sidebar/rename-chat-dialog.tsx
+ msgid "Chat name"
+ msgstr "Chat name"
++
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
++msgid "Chat navigation"
++msgstr "Chat navigation"
+
+ #: src/providers/chatgpt-registration.ts
+ #~ msgid "ChatGPT account"
+@@ -1068,6 +1092,7 @@
+ msgid "Clear Local Database?"
+ msgstr "Clear Local Database?"
+
++#: src/components/chat/thunderbird-api-key.tsx
+ #: src/settings/models/edit-model-form.tsx
+ msgid "Clear saved API key"
+ msgstr "Clear saved API key"
+@@ -1333,6 +1358,10 @@
+ #: src/settings/models/add-provider-models.tsx
+ msgid "Connect this provider on this device to add models."
+ msgstr "Connect this provider on this device to add models."
++
++#: src/components/chat/thunderbird-settings-dialog.tsx
++msgid "Connect Tinfoil"
++msgstr "Connect Tinfoil"
+
+ #: src/components/server-connection/server-connection-form.tsx
+ msgid "Connect to server"
+@@ -2528,6 +2557,10 @@
+ msgid "Downloading…"
+ msgstr "Downloading…"
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Draft a reply"
++msgstr "Draft a reply"
++
+ #: src/layout/sidebar/project-drop-row.tsx
+ msgid "Drop"
+ msgstr "Drop"
+@@ -2713,6 +2746,10 @@
+ msgid "Enter a model ID"
+ msgstr "Enter a model ID"
+
++#: src/components/chat/thunderbird-api-key.tsx
++msgid "Enter a replacement API key"
++msgstr "Enter a replacement API key"
++
+ #: src/components/otari-connection/use-otari-connection-state.ts
+ msgid "Enter a valid HTTPS server URL, or an HTTP localhost URL for local development."
+ msgstr "Enter a valid HTTPS server URL, or an HTTP localhost URL for local development."
+@@ -2753,6 +2790,7 @@
+ msgid "Enter this fingerprint on your trusted device before approving."
+ msgstr "Enter this fingerprint on your trusted device before approving."
+
++#: src/components/chat/thunderbird-api-key.tsx
+ #: src/components/search-provider-setup/search-provider-setup.tsx
+ msgid "Enter your API key"
+ msgstr "Enter your API key"
+@@ -2898,6 +2936,7 @@
+ msgid "Failed to reset the model."
+ msgstr "Failed to reset the model."
+
++#: src/components/chat/thunderbird-api-key.tsx
+ #: src/settings/models/use-models-page-state.ts
+ msgid "Failed to save the model."
+ msgstr "Failed to save the model."
+@@ -3090,6 +3129,10 @@
+ msgid "Help make {appName} better."
+ msgstr "Help make {appName} better."
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Help me draft a reply to an email. Ask me which message to use."
++msgstr "Help me draft a reply to an email. Ask me which message to use."
++
+ #: src/settings/preferences.tsx
+ msgid "Help us improve the app by sending anonymous usage info such as crashes, performance, and usage. Read more about our <0>privacy policy</0>."
+ msgstr "Help us improve the app by sending anonymous usage info such as crashes, performance, and usage. Read more about our <0>privacy policy</0>."
+@@ -3431,6 +3474,7 @@
+ msgstr "Loading this app's pairing identity…"
+
+ #: src/components/chat/chat-ui.tsx
++#: src/components/chat/thunderbird-settings-dialog.tsx
+ #: src/components/device-approval.tsx
+ #: src/components/sidebar-footer.tsx
+ #: src/widgets/connect-integration/widget.tsx
+@@ -3470,6 +3514,10 @@
+ #: src/components/logout-modal.tsx
+ msgid "Logging out…"
+ msgstr "Logging out…"
++
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Look at my calendar and tasks for today. What should I prepare for?"
++msgstr "Look at my calendar and tasks for today. What should I prepare for?"
+
+ #: src/components/chat/effort-selector/use-effort-selector-state.ts
+ msgid "Low"
+@@ -3720,6 +3768,7 @@
+ msgid "New Agent"
+ msgstr "New Agent"
+
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
+ #: src/layout/sidebar/chat-list.tsx
+ #: src/layout/sidebar/recent-chats-menu.tsx
+ #: src/mini-apps/mini-app-chat-history.tsx
+@@ -3791,6 +3840,7 @@
+
+ #: src/layout/sidebar/chat-list.tsx
+ #: src/layout/sidebar/chat-menu-items.tsx
++#: src/layout/sidebar/index.tsx
+ msgid "No chats yet"
+ msgstr "No chats yet"
+
+@@ -4372,6 +4422,10 @@
+ msgid "Pinned skill {label}"
+ msgstr "Pinned skill {label}"
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Plan my day"
++msgstr "Plan my day"
++
+ #: src/voice/speakable.ts
+ msgid "Please choose one of the options on screen."
+ msgstr "Please choose one of the options on screen."
+@@ -4478,6 +4532,11 @@
+ msgid "Provider"
+ msgstr "Provider"
+
++#: src/components/chat/thunderbird-settings-dialog.tsx
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
++msgid "Provider settings"
++msgstr "Provider settings"
++
+ #: src/settings/preferences.tsx
+ msgid "Proxying is required in the web app to bypass browser CORS restrictions."
+ msgstr "Proxying is required in the web app to bypass browser CORS restrictions."
+@@ -4552,6 +4611,7 @@
+ #~ msgstr "Recent Projects"
+
+ #: src/layout/sidebar/chat-list.tsx
++#: src/layout/sidebar/index.tsx
+ #: src/layout/sidebar/recent-chats-menu.tsx
+ msgid "Recents"
+ msgstr "Recents"
+@@ -4829,6 +4889,7 @@
+ msgid "Run this on the machine hosting the bridge, then add it — the connection is verified on first use."
+ msgstr "Run this on the machine hosting the bridge, then add it — the connection is verified on first use."
+
++#: src/components/chat/thunderbird-api-key.tsx
+ #: src/components/set-node-id-dialog.tsx
+ #: src/components/settings/agents/editable-field.tsx
+ #: src/layout/sidebar/rename-chat-dialog.tsx
+@@ -5195,6 +5256,7 @@
+
+ #: src/layout/sidebar/nav-toggle.tsx
+ #: src/layout/sidebar/settings-sidebar.tsx
++#: src/layout/sidebar/sidebar-header-actions.tsx
+ msgid "Settings"
+ msgstr "Settings"
+
+@@ -5555,6 +5617,14 @@
+ msgid "Suggested"
+ msgstr "Suggested"
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Suggested prompts"
++msgstr "Suggested prompts"
++
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Summarize the unread messages in my inbox and highlight anything that needs a reply."
++msgstr "Summarize the unread messages in my inbox and highlight anything that needs a reply."
++
+ #: src/components/context-usage/retained-context-message.tsx
+ msgid "Summary"
+ msgstr "Summary"
+@@ -6258,6 +6328,10 @@
+ #: src/components/onboarding/onboarding-model-step.tsx
+ msgid "Tinfoil"
+ msgstr "Tinfoil"
++
++#: src/components/chat/thunderbird-api-key.tsx
++msgid "Tinfoil API key"
++msgstr "Tinfoil API key"
+
+ #: src/integrations/tinfoil-search/api.ts
+ msgid "Tinfoil could not retrieve this page."
+@@ -6993,6 +7067,10 @@
+ msgid "word1 word2 word3 ..."
+ msgstr "word1 word2 word3 ..."
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Work with your mail, calendar, and contacts in Thunderbird."
++msgstr "Work with your mail, calendar, and contacts in Thunderbird."
++
+ #: src/settings/preferences.tsx
+ msgid "Would you like to change the language to {suggestedLanguageLabel}?"
+ msgstr "Would you like to change the language to {suggestedLanguageLabel}?"
+@@ -7214,6 +7292,10 @@
+ msgid "Your encryption was upgraded and a new 24-word recovery phrase was generated. Write it down in order and store it somewhere safe. This phrase won't be shown again."
+ msgstr "Your encryption was upgraded and a new 24-word recovery phrase was generated. Write it down in order and store it somewhere safe. This phrase won't be shown again."
+
++#: src/components/chat/thunderbird-settings-dialog.tsx
++msgid "Your key is saved in this Thunderbird profile."
++msgstr "Your key is saved in this Thunderbird profile."
++
+ #: src/components/onboarding/onboarding-server-step.tsx
+ msgid "Your local data stays on this device until you enable sync."
+ msgstr "Your local data stays on this device until you enable sync."
+--- a/src/locales/es/messages.po
++++ b/src/locales/es/messages.po
+@@ -100,6 +100,10 @@
+ msgid "{appName} will use it across the app. You can change it later in Preferences."
+ msgstr "{appName} lo usará en toda la aplicación. Puedes cambiarlo más tarde en Preferencias."
+
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
++msgid "{conversation} — Thunderbolt"
++msgstr "{conversation} — Thunderbolt"
++
+ #. js-lingui:icu=%7Bcount%2C+plural%2C+one+%7B%23+chat%7D+other+%7B%23+chats%7D%7D&pluralize_on=count
+ #: src/projects/index.tsx
+ #~ msgid "# chat"
+@@ -353,6 +357,10 @@
+ #: src/components/chat/chat-skills-bar.tsx
+ msgid "Add a skill"
+ msgstr "Añadir una habilidad"
++
++#: src/components/chat/thunderbird-settings-dialog.tsx
++msgid "Add a Tinfoil API key to send messages."
++msgstr "Añade una clave API de Tinfoil para enviar mensajes."
+
+ #: src/components/create-item/context.tsx
+ #: src/components/settings/agents/add-custom-agent-form.tsx
+@@ -682,12 +690,16 @@
+ msgstr ""
+
+ #: src/components/chat/chat-prompt-input.tsx
++msgid "Ask about your workspace…"
++msgstr "Pregunta sobre tu espacio de trabajo…"
++
++#: src/components/chat/chat-prompt-input.tsx
+ msgid "Ask me anything…"
+ msgstr "Pregúntame lo que quieras…"
+
+ #: src/components/context-usage/retained-context-message.tsx
+ msgid "Assistant"
+-msgstr ""
++msgstr "Asistente"
+
+ #: src/components/sync-enable-warning-dialog.tsx
+ msgid "At this time, synced data is not encrypted. Enabling sync will store your data on our servers without encryption. Do you want to continue?"
+@@ -850,6 +862,10 @@
+ msgid "Cannot change agent during reply"
+ msgstr "No se puede cambiar de agente durante una respuesta"
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Catch up on mail"
++msgstr "Revisar el correo"
++
+ #: src/i18n/unit-labels.ts
+ #: src/widgets/weather-forecast/display.tsx
+ msgid "Celsius"
+@@ -888,9 +904,17 @@
+ msgid "Chat actions"
+ msgstr "Acciones del chat"
+
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
++msgid "Chat history"
++msgstr "Historial de chats"
++
+ #: src/layout/sidebar/rename-chat-dialog.tsx
+ msgid "Chat name"
+ msgstr "Nombre del chat"
++
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
++msgid "Chat navigation"
++msgstr "Navegación de chats"
+
+ #: src/providers/chatgpt-registration.ts
+ #~ msgid "ChatGPT account"
+@@ -1080,6 +1104,7 @@
+ msgid "Clear Local Database?"
+ msgstr "¿Borrar la base de datos local?"
+
++#: src/components/chat/thunderbird-api-key.tsx
+ #: src/settings/models/edit-model-form.tsx
+ msgid "Clear saved API key"
+ msgstr "Borrar la clave de API guardada"
+@@ -1345,6 +1370,10 @@
+ #: src/settings/models/add-provider-models.tsx
+ msgid "Connect this provider on this device to add models."
+ msgstr ""
++
++#: src/components/chat/thunderbird-settings-dialog.tsx
++msgid "Connect Tinfoil"
++msgstr "Conectar Tinfoil"
+
+ #: src/components/server-connection/server-connection-form.tsx
+ msgid "Connect to server"
+@@ -2540,6 +2569,10 @@
+ msgid "Downloading…"
+ msgstr "Descargando…"
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Draft a reply"
++msgstr "Redactar una respuesta"
++
+ #: src/layout/sidebar/project-drop-row.tsx
+ msgid "Drop"
+ msgstr "Suelta"
+@@ -2725,6 +2758,10 @@
+ msgid "Enter a model ID"
+ msgstr ""
+
++#: src/components/chat/thunderbird-api-key.tsx
++msgid "Enter a replacement API key"
++msgstr "Introduce una nueva clave de API"
++
+ #: src/components/otari-connection/use-otari-connection-state.ts
+ msgid "Enter a valid HTTPS server URL, or an HTTP localhost URL for local development."
+ msgstr ""
+@@ -2765,9 +2802,10 @@
+ msgid "Enter this fingerprint on your trusted device before approving."
+ msgstr "Introduce esta huella digital en tu dispositivo de confianza antes de aprobar."
+
++#: src/components/chat/thunderbird-api-key.tsx
+ #: src/components/search-provider-setup/search-provider-setup.tsx
+ msgid "Enter your API key"
+-msgstr ""
++msgstr "Introduce tu clave de API"
+
+ #: src/components/sign-in-modal.tsx
+ msgid "Enter your code"
+@@ -2910,9 +2948,10 @@
+ msgid "Failed to reset the model."
+ msgstr ""
+
++#: src/components/chat/thunderbird-api-key.tsx
+ #: src/settings/models/use-models-page-state.ts
+ msgid "Failed to save the model."
+-msgstr ""
++msgstr "No se pudo guardar el modelo."
+
+ #: src/hooks/use-sync-setup.ts
+ #: src/settings/account/use-delete-account.ts
+@@ -3102,6 +3141,10 @@
+ msgid "Help make {appName} better."
+ msgstr ""
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Help me draft a reply to an email. Ask me which message to use."
++msgstr "Ayúdame a redactar la respuesta a un correo. Pregúntame qué mensaje quiero responder."
++
+ #: src/settings/preferences.tsx
+ msgid "Help us improve the app by sending anonymous usage info such as crashes, performance, and usage. Read more about our <0>privacy policy</0>."
+ msgstr "Ayúdanos a mejorar la app enviando información de uso anónima, como fallos, rendimiento y uso. Más información en nuestra <0>política de privacidad</0>."
+@@ -3443,6 +3486,7 @@
+ msgstr "Cargando la identidad de emparejamiento de esta app…"
+
+ #: src/components/chat/chat-ui.tsx
++#: src/components/chat/thunderbird-settings-dialog.tsx
+ #: src/components/device-approval.tsx
+ #: src/components/sidebar-footer.tsx
+ #: src/widgets/connect-integration/widget.tsx
+@@ -3482,6 +3526,10 @@
+ #: src/components/logout-modal.tsx
+ msgid "Logging out…"
+ msgstr "Cerrando sesión…"
++
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Look at my calendar and tasks for today. What should I prepare for?"
++msgstr "Revisa mi calendario y mis tareas de hoy. ¿Qué debería preparar?"
+
+ #: src/components/chat/effort-selector/use-effort-selector-state.ts
+ msgid "Low"
+@@ -3732,6 +3780,7 @@
+ msgid "New Agent"
+ msgstr "Nuevo agente"
+
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
+ #: src/layout/sidebar/chat-list.tsx
+ #: src/layout/sidebar/recent-chats-menu.tsx
+ #: src/mini-apps/mini-app-chat-history.tsx
+@@ -3803,6 +3852,7 @@
+
+ #: src/layout/sidebar/chat-list.tsx
+ #: src/layout/sidebar/chat-menu-items.tsx
++#: src/layout/sidebar/index.tsx
+ msgid "No chats yet"
+ msgstr "Todavía no hay chats"
+
+@@ -3886,7 +3936,7 @@
+
+ #: src/components/otari-connection/otari-connection.tsx
+ msgid "No models available yet"
+-msgstr ""
++msgstr "Aún no hay modelos disponibles"
+
+ #: src/settings/models/models-list.tsx
+ msgid "No models configured"
+@@ -4384,6 +4434,10 @@
+ msgid "Pinned skill {label}"
+ msgstr "Habilidad fijada {label}"
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Plan my day"
++msgstr "Planificar mi día"
++
+ #: src/voice/speakable.ts
+ msgid "Please choose one of the options on screen."
+ msgstr "Elige una de las opciones de la pantalla."
+@@ -4490,6 +4544,11 @@
+ msgid "Provider"
+ msgstr "Proveedor"
+
++#: src/components/chat/thunderbird-settings-dialog.tsx
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
++msgid "Provider settings"
++msgstr "Ajustes del proveedor"
++
+ #: src/settings/preferences.tsx
+ msgid "Proxying is required in the web app to bypass browser CORS restrictions."
+ msgstr "En la app web es necesario usar proxy para evitar las restricciones CORS del navegador."
+@@ -4564,6 +4623,7 @@
+ #~ msgstr "Proyectos recientes"
+
+ #: src/layout/sidebar/chat-list.tsx
++#: src/layout/sidebar/index.tsx
+ #: src/layout/sidebar/recent-chats-menu.tsx
+ msgid "Recents"
+ msgstr ""
+@@ -4841,6 +4901,7 @@
+ msgid "Run this on the machine hosting the bridge, then add it — the connection is verified on first use."
+ msgstr "Ejecuta esto en la máquina que aloja el bridge y luego añádelo: la conexión se verifica en el primer uso."
+
++#: src/components/chat/thunderbird-api-key.tsx
+ #: src/components/set-node-id-dialog.tsx
+ #: src/components/settings/agents/editable-field.tsx
+ #: src/layout/sidebar/rename-chat-dialog.tsx
+@@ -5207,6 +5268,7 @@
+
+ #: src/layout/sidebar/nav-toggle.tsx
+ #: src/layout/sidebar/settings-sidebar.tsx
++#: src/layout/sidebar/sidebar-header-actions.tsx
+ msgid "Settings"
+ msgstr "Ajustes"
+
+@@ -5567,6 +5629,14 @@
+ msgid "Suggested"
+ msgstr "Sugeridos"
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Suggested prompts"
++msgstr "Preguntas sugeridas"
++
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Summarize the unread messages in my inbox and highlight anything that needs a reply."
++msgstr "Resume los mensajes sin leer de mi bandeja de entrada y destaca los que requieren una respuesta."
++
+ #: src/components/context-usage/retained-context-message.tsx
+ msgid "Summary"
+ msgstr ""
+@@ -6270,6 +6340,10 @@
+ #: src/components/onboarding/onboarding-model-step.tsx
+ msgid "Tinfoil"
+ msgstr ""
++
++#: src/components/chat/thunderbird-api-key.tsx
++msgid "Tinfoil API key"
++msgstr "Clave de API de Tinfoil"
+
+ #: src/integrations/tinfoil-search/api.ts
+ msgid "Tinfoil could not retrieve this page."
+@@ -7005,6 +7079,10 @@
+ msgid "word1 word2 word3 ..."
+ msgstr "palabra1 palabra2 palabra3 ..."
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Work with your mail, calendar, and contacts in Thunderbird."
++msgstr "Trabaja con tu correo, calendario y contactos en Thunderbird."
++
+ #: src/settings/preferences.tsx
+ msgid "Would you like to change the language to {suggestedLanguageLabel}?"
+ msgstr "¿Quieres cambiar el idioma a {suggestedLanguageLabel}?"
+@@ -7027,7 +7105,7 @@
+
+ #: src/components/context-usage/retained-context-message.tsx
+ msgid "You"
+-msgstr ""
++msgstr "Tú"
+
+ #: src/components/sign-in/sign-in-otp-step.tsx
+ msgid "You appear to be using a <0>localhost</0> backend. Check your backend server logs for the code or magic link."
+@@ -7226,6 +7304,10 @@
+ msgid "Your encryption was upgraded and a new 24-word recovery phrase was generated. Write it down in order and store it somewhere safe. This phrase won't be shown again."
+ msgstr ""
+
++#: src/components/chat/thunderbird-settings-dialog.tsx
++msgid "Your key is saved in this Thunderbird profile."
++msgstr "Tu clave se guarda en este perfil de Thunderbird."
++
+ #: src/components/onboarding/onboarding-server-step.tsx
+ msgid "Your local data stays on this device until you enable sync."
+ msgstr ""
+--- a/src/locales/fr/messages.po
++++ b/src/locales/fr/messages.po
+@@ -100,6 +100,10 @@
+ msgid "{appName} will use it across the app. You can change it later in Preferences."
+ msgstr "{appName} l'utilisera dans toute l'application. Vous pourrez la modifier plus tard dans les Préférences."
+
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
++msgid "{conversation} — Thunderbolt"
++msgstr "{conversation} — Thunderbolt"
++
+ #. js-lingui:icu=%7Bcount%2C+plural%2C+one+%7B%23+chat%7D+other+%7B%23+chats%7D%7D&pluralize_on=count
+ #: src/projects/index.tsx
+ #~ msgid "# chat"
+@@ -353,6 +357,10 @@
+ #: src/components/chat/chat-skills-bar.tsx
+ msgid "Add a skill"
+ msgstr "Ajouter une compétence"
++
++#: src/components/chat/thunderbird-settings-dialog.tsx
++msgid "Add a Tinfoil API key to send messages."
++msgstr "Ajoutez une clé API Tinfoil pour envoyer des messages."
+
+ #: src/components/create-item/context.tsx
+ #: src/components/settings/agents/add-custom-agent-form.tsx
+@@ -682,12 +690,16 @@
+ msgstr ""
+
+ #: src/components/chat/chat-prompt-input.tsx
++msgid "Ask about your workspace…"
++msgstr "Posez une question sur votre espace de travail…"
++
++#: src/components/chat/chat-prompt-input.tsx
+ msgid "Ask me anything…"
+ msgstr "Posez-moi une question…"
+
+ #: src/components/context-usage/retained-context-message.tsx
+ msgid "Assistant"
+-msgstr ""
++msgstr "Assistant"
+
+ #: src/components/sync-enable-warning-dialog.tsx
+ msgid "At this time, synced data is not encrypted. Enabling sync will store your data on our servers without encryption. Do you want to continue?"
+@@ -850,6 +862,10 @@
+ msgid "Cannot change agent during reply"
+ msgstr "Impossible de changer d'agent pendant une réponse"
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Catch up on mail"
++msgstr "Consulter mes e-mails"
++
+ #: src/i18n/unit-labels.ts
+ #: src/widgets/weather-forecast/display.tsx
+ msgid "Celsius"
+@@ -888,9 +904,17 @@
+ msgid "Chat actions"
+ msgstr "Actions de la conversation"
+
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
++msgid "Chat history"
++msgstr "Historique des discussions"
++
+ #: src/layout/sidebar/rename-chat-dialog.tsx
+ msgid "Chat name"
+ msgstr "Nom de la conversation"
++
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
++msgid "Chat navigation"
++msgstr "Navigation des discussions"
+
+ #: src/providers/chatgpt-registration.ts
+ #~ msgid "ChatGPT account"
+@@ -1080,6 +1104,7 @@
+ msgid "Clear Local Database?"
+ msgstr "Effacer la base de données locale ?"
+
++#: src/components/chat/thunderbird-api-key.tsx
+ #: src/settings/models/edit-model-form.tsx
+ msgid "Clear saved API key"
+ msgstr "Effacer la clé API enregistrée"
+@@ -1345,6 +1370,10 @@
+ #: src/settings/models/add-provider-models.tsx
+ msgid "Connect this provider on this device to add models."
+ msgstr ""
++
++#: src/components/chat/thunderbird-settings-dialog.tsx
++msgid "Connect Tinfoil"
++msgstr "Connecter Tinfoil"
+
+ #: src/components/server-connection/server-connection-form.tsx
+ msgid "Connect to server"
+@@ -2540,6 +2569,10 @@
+ msgid "Downloading…"
+ msgstr "Téléchargement…"
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Draft a reply"
++msgstr "Rédiger une réponse"
++
+ #: src/layout/sidebar/project-drop-row.tsx
+ msgid "Drop"
+ msgstr "Déposer"
+@@ -2725,6 +2758,10 @@
+ msgid "Enter a model ID"
+ msgstr ""
+
++#: src/components/chat/thunderbird-api-key.tsx
++msgid "Enter a replacement API key"
++msgstr "Saisissez une nouvelle clé API"
++
+ #: src/components/otari-connection/use-otari-connection-state.ts
+ msgid "Enter a valid HTTPS server URL, or an HTTP localhost URL for local development."
+ msgstr ""
+@@ -2765,9 +2802,10 @@
+ msgid "Enter this fingerprint on your trusted device before approving."
+ msgstr "Saisissez cette empreinte sur votre appareil de confiance avant d'approuver."
+
++#: src/components/chat/thunderbird-api-key.tsx
+ #: src/components/search-provider-setup/search-provider-setup.tsx
+ msgid "Enter your API key"
+-msgstr ""
++msgstr "Saisissez votre clé API"
+
+ #: src/components/sign-in-modal.tsx
+ msgid "Enter your code"
+@@ -2910,9 +2948,10 @@
+ msgid "Failed to reset the model."
+ msgstr ""
+
++#: src/components/chat/thunderbird-api-key.tsx
+ #: src/settings/models/use-models-page-state.ts
+ msgid "Failed to save the model."
+-msgstr ""
++msgstr "Impossible d’enregistrer le modèle."
+
+ #: src/hooks/use-sync-setup.ts
+ #: src/settings/account/use-delete-account.ts
+@@ -3102,6 +3141,10 @@
+ msgid "Help make {appName} better."
+ msgstr ""
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Help me draft a reply to an email. Ask me which message to use."
++msgstr "Aide-moi à rédiger une réponse à un e-mail. Demande-moi à quel message je souhaite répondre."
++
+ #: src/settings/preferences.tsx
+ msgid "Help us improve the app by sending anonymous usage info such as crashes, performance, and usage. Read more about our <0>privacy policy</0>."
+ msgstr "Aidez-nous à améliorer l'application en envoyant des informations d'utilisation anonymes : plantages, performances et usage. En savoir plus dans notre <0>politique de confidentialité</0>."
+@@ -3443,6 +3486,7 @@
+ msgstr "Chargement de l'identité d'association de cette application…"
+
+ #: src/components/chat/chat-ui.tsx
++#: src/components/chat/thunderbird-settings-dialog.tsx
+ #: src/components/device-approval.tsx
+ #: src/components/sidebar-footer.tsx
+ #: src/widgets/connect-integration/widget.tsx
+@@ -3482,6 +3526,10 @@
+ #: src/components/logout-modal.tsx
+ msgid "Logging out…"
+ msgstr "Déconnexion…"
++
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Look at my calendar and tasks for today. What should I prepare for?"
++msgstr "Consulte mon agenda et mes tâches du jour. Que dois-je préparer ?"
+
+ #: src/components/chat/effort-selector/use-effort-selector-state.ts
+ msgid "Low"
+@@ -3732,6 +3780,7 @@
+ msgid "New Agent"
+ msgstr "Nouvel agent"
+
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
+ #: src/layout/sidebar/chat-list.tsx
+ #: src/layout/sidebar/recent-chats-menu.tsx
+ #: src/mini-apps/mini-app-chat-history.tsx
+@@ -3803,6 +3852,7 @@
+
+ #: src/layout/sidebar/chat-list.tsx
+ #: src/layout/sidebar/chat-menu-items.tsx
++#: src/layout/sidebar/index.tsx
+ msgid "No chats yet"
+ msgstr "Aucune conversation pour l'instant"
+
+@@ -3886,7 +3936,7 @@
+
+ #: src/components/otari-connection/otari-connection.tsx
+ msgid "No models available yet"
+-msgstr ""
++msgstr "Aucun modèle disponible pour le moment"
+
+ #: src/settings/models/models-list.tsx
+ msgid "No models configured"
+@@ -4384,6 +4434,10 @@
+ msgid "Pinned skill {label}"
+ msgstr "Compétence épinglée {label}"
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Plan my day"
++msgstr "Planifier ma journée"
++
+ #: src/voice/speakable.ts
+ msgid "Please choose one of the options on screen."
+ msgstr "Veuillez choisir l'une des options à l'écran."
+@@ -4490,6 +4544,11 @@
+ msgid "Provider"
+ msgstr "Fournisseur"
+
++#: src/components/chat/thunderbird-settings-dialog.tsx
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
++msgid "Provider settings"
++msgstr "Paramètres du fournisseur"
++
+ #: src/settings/preferences.tsx
+ msgid "Proxying is required in the web app to bypass browser CORS restrictions."
+ msgstr "Le proxy est nécessaire dans l'application web pour contourner les restrictions CORS du navigateur."
+@@ -4564,6 +4623,7 @@
+ #~ msgstr "Projets récents"
+
+ #: src/layout/sidebar/chat-list.tsx
++#: src/layout/sidebar/index.tsx
+ #: src/layout/sidebar/recent-chats-menu.tsx
+ msgid "Recents"
+ msgstr ""
+@@ -4841,6 +4901,7 @@
+ msgid "Run this on the machine hosting the bridge, then add it — the connection is verified on first use."
+ msgstr "Exécutez ceci sur la machine qui héberge le bridge, puis ajoutez-le — la connexion est vérifiée à la première utilisation."
+
++#: src/components/chat/thunderbird-api-key.tsx
+ #: src/components/set-node-id-dialog.tsx
+ #: src/components/settings/agents/editable-field.tsx
+ #: src/layout/sidebar/rename-chat-dialog.tsx
+@@ -5207,6 +5268,7 @@
+
+ #: src/layout/sidebar/nav-toggle.tsx
+ #: src/layout/sidebar/settings-sidebar.tsx
++#: src/layout/sidebar/sidebar-header-actions.tsx
+ msgid "Settings"
+ msgstr "Paramètres"
+
+@@ -5567,6 +5629,14 @@
+ msgid "Suggested"
+ msgstr "Suggestions"
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Suggested prompts"
++msgstr "Suggestions de questions"
++
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Summarize the unread messages in my inbox and highlight anything that needs a reply."
++msgstr "Résume les messages non lus de ma boîte de réception et indique ceux qui nécessitent une réponse."
++
+ #: src/components/context-usage/retained-context-message.tsx
+ msgid "Summary"
+ msgstr ""
+@@ -6270,6 +6340,10 @@
+ #: src/components/onboarding/onboarding-model-step.tsx
+ msgid "Tinfoil"
+ msgstr ""
++
++#: src/components/chat/thunderbird-api-key.tsx
++msgid "Tinfoil API key"
++msgstr "Clé API Tinfoil"
+
+ #: src/integrations/tinfoil-search/api.ts
+ msgid "Tinfoil could not retrieve this page."
+@@ -7005,6 +7079,10 @@
+ msgid "word1 word2 word3 ..."
+ msgstr "mot1 mot2 mot3 ..."
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Work with your mail, calendar, and contacts in Thunderbird."
++msgstr "Travaillez avec vos e-mails, votre agenda et vos contacts dans Thunderbird."
++
+ #: src/settings/preferences.tsx
+ msgid "Would you like to change the language to {suggestedLanguageLabel}?"
+ msgstr "Souhaitez-vous changer la langue en {suggestedLanguageLabel} ?"
+@@ -7027,7 +7105,7 @@
+
+ #: src/components/context-usage/retained-context-message.tsx
+ msgid "You"
+-msgstr ""
++msgstr "Vous"
+
+ #: src/components/sign-in/sign-in-otp-step.tsx
+ msgid "You appear to be using a <0>localhost</0> backend. Check your backend server logs for the code or magic link."
+@@ -7226,6 +7304,10 @@
+ msgid "Your encryption was upgraded and a new 24-word recovery phrase was generated. Write it down in order and store it somewhere safe. This phrase won't be shown again."
+ msgstr ""
+
++#: src/components/chat/thunderbird-settings-dialog.tsx
++msgid "Your key is saved in this Thunderbird profile."
++msgstr "Votre clé est enregistrée dans ce profil Thunderbird."
++
+ #: src/components/onboarding/onboarding-server-step.tsx
+ msgid "Your local data stays on this device until you enable sync."
+ msgstr ""
+--- a/src/locales/ja/messages.po
++++ b/src/locales/ja/messages.po
+@@ -96,6 +96,10 @@
+ msgid "{appName} will use it across the app. You can change it later in Preferences."
+ msgstr "{appName} はアプリ全体でこの言語を使用します。後で環境設定から変更できます。"
+
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
++msgid "{conversation} — Thunderbolt"
++msgstr "{conversation} — Thunderbolt"
++
+ #. js-lingui:icu=%7Bcount%2C+plural%2C+one+%7B%23+chat%7D+other+%7B%23+chats%7D%7D&pluralize_on=count
+ #: src/projects/index.tsx
+ #~ msgid "# chat"
+@@ -329,6 +333,10 @@
+ #: src/components/chat/chat-skills-bar.tsx
+ msgid "Add a skill"
+ msgstr "スキルを追加"
++
++#: src/components/chat/thunderbird-settings-dialog.tsx
++msgid "Add a Tinfoil API key to send messages."
++msgstr "メッセージを送信するには Tinfoil の API キーを追加してください。"
+
+ #: src/components/create-item/context.tsx
+ #: src/components/settings/agents/add-custom-agent-form.tsx
+@@ -658,12 +666,16 @@
+ msgstr ""
+
+ #: src/components/chat/chat-prompt-input.tsx
++msgid "Ask about your workspace…"
++msgstr "ワークスペースについて質問…"
++
++#: src/components/chat/chat-prompt-input.tsx
+ msgid "Ask me anything…"
+ msgstr "何でも質問してください…"
+
+ #: src/components/context-usage/retained-context-message.tsx
+ msgid "Assistant"
+-msgstr ""
++msgstr "アシスタント"
+
+ #: src/components/sync-enable-warning-dialog.tsx
+ msgid "At this time, synced data is not encrypted. Enabling sync will store your data on our servers without encryption. Do you want to continue?"
+@@ -826,6 +838,10 @@
+ msgid "Cannot change agent during reply"
+ msgstr "応答中はエージェントを変更できません"
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Catch up on mail"
++msgstr "メールを確認"
++
+ #: src/i18n/unit-labels.ts
+ #: src/widgets/weather-forecast/display.tsx
+ msgid "Celsius"
+@@ -864,9 +880,17 @@
+ msgid "Chat actions"
+ msgstr "チャットの操作"
+
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
++msgid "Chat history"
++msgstr "チャット履歴"
++
+ #: src/layout/sidebar/rename-chat-dialog.tsx
+ msgid "Chat name"
+ msgstr "チャット名"
++
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
++msgid "Chat navigation"
++msgstr "チャットのナビゲーション"
+
+ #: src/providers/chatgpt-registration.ts
+ #~ msgid "ChatGPT account"
+@@ -1056,6 +1080,7 @@
+ msgid "Clear Local Database?"
+ msgstr "ローカルデータベースを消去しますか？"
+
++#: src/components/chat/thunderbird-api-key.tsx
+ #: src/settings/models/edit-model-form.tsx
+ msgid "Clear saved API key"
+ msgstr "保存された API キーを消去"
+@@ -1321,6 +1346,10 @@
+ #: src/settings/models/add-provider-models.tsx
+ msgid "Connect this provider on this device to add models."
+ msgstr ""
++
++#: src/components/chat/thunderbird-settings-dialog.tsx
++msgid "Connect Tinfoil"
++msgstr "Tinfoil に接続"
+
+ #: src/components/server-connection/server-connection-form.tsx
+ msgid "Connect to server"
+@@ -2516,6 +2545,10 @@
+ msgid "Downloading…"
+ msgstr "ダウンロード中…"
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Draft a reply"
++msgstr "返信の下書き"
++
+ #: src/layout/sidebar/project-drop-row.tsx
+ msgid "Drop"
+ msgstr "ドロップ"
+@@ -2701,6 +2734,10 @@
+ msgid "Enter a model ID"
+ msgstr ""
+
++#: src/components/chat/thunderbird-api-key.tsx
++msgid "Enter a replacement API key"
++msgstr "新しい API キーを入力"
++
+ #: src/components/otari-connection/use-otari-connection-state.ts
+ msgid "Enter a valid HTTPS server URL, or an HTTP localhost URL for local development."
+ msgstr ""
+@@ -2741,9 +2778,10 @@
+ msgid "Enter this fingerprint on your trusted device before approving."
+ msgstr "承認する前に、信頼済みのデバイスでこのフィンガープリントを入力してください。"
+
++#: src/components/chat/thunderbird-api-key.tsx
+ #: src/components/search-provider-setup/search-provider-setup.tsx
+ msgid "Enter your API key"
+-msgstr ""
++msgstr "API キーを入力してください"
+
+ #: src/components/sign-in-modal.tsx
+ msgid "Enter your code"
+@@ -2886,9 +2924,10 @@
+ msgid "Failed to reset the model."
+ msgstr ""
+
++#: src/components/chat/thunderbird-api-key.tsx
+ #: src/settings/models/use-models-page-state.ts
+ msgid "Failed to save the model."
+-msgstr ""
++msgstr "モデルを保存できませんでした。"
+
+ #: src/hooks/use-sync-setup.ts
+ #: src/settings/account/use-delete-account.ts
+@@ -3078,6 +3117,10 @@
+ msgid "Help make {appName} better."
+ msgstr ""
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Help me draft a reply to an email. Ask me which message to use."
++msgstr "メールの返信を下書きするのを手伝ってください。どのメッセージに返信するか聞いてください。"
++
+ #: src/settings/preferences.tsx
+ msgid "Help us improve the app by sending anonymous usage info such as crashes, performance, and usage. Read more about our <0>privacy policy</0>."
+ msgstr "クラッシュ、パフォーマンス、利用状況などの匿名の利用情報を送信して、アプリの改善にご協力ください。詳しくは<0>プライバシーポリシー</0>をご覧ください。"
+@@ -3419,6 +3462,7 @@
+ msgstr "このアプリのペアリング ID を読み込んでいます…"
+
+ #: src/components/chat/chat-ui.tsx
++#: src/components/chat/thunderbird-settings-dialog.tsx
+ #: src/components/device-approval.tsx
+ #: src/components/sidebar-footer.tsx
+ #: src/widgets/connect-integration/widget.tsx
+@@ -3458,6 +3502,10 @@
+ #: src/components/logout-modal.tsx
+ msgid "Logging out…"
+ msgstr "ログアウトしています…"
++
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Look at my calendar and tasks for today. What should I prepare for?"
++msgstr "今日のカレンダーとタスクを確認して、準備しておくことを教えてください。"
+
+ #: src/components/chat/effort-selector/use-effort-selector-state.ts
+ msgid "Low"
+@@ -3708,6 +3756,7 @@
+ msgid "New Agent"
+ msgstr "新しいエージェント"
+
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
+ #: src/layout/sidebar/chat-list.tsx
+ #: src/layout/sidebar/recent-chats-menu.tsx
+ #: src/mini-apps/mini-app-chat-history.tsx
+@@ -3779,6 +3828,7 @@
+
+ #: src/layout/sidebar/chat-list.tsx
+ #: src/layout/sidebar/chat-menu-items.tsx
++#: src/layout/sidebar/index.tsx
+ msgid "No chats yet"
+ msgstr "まだチャットはありません"
+
+@@ -3862,7 +3912,7 @@
+
+ #: src/components/otari-connection/otari-connection.tsx
+ msgid "No models available yet"
+-msgstr ""
++msgstr "利用できるモデルはまだありません"
+
+ #: src/settings/models/models-list.tsx
+ msgid "No models configured"
+@@ -4360,6 +4410,10 @@
+ msgid "Pinned skill {label}"
+ msgstr "ピン留めされたスキル {label}"
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Plan my day"
++msgstr "今日の予定を整理"
++
+ #: src/voice/speakable.ts
+ msgid "Please choose one of the options on screen."
+ msgstr "画面に表示されている選択肢からお選びください。"
+@@ -4466,6 +4520,11 @@
+ msgid "Provider"
+ msgstr "プロバイダー"
+
++#: src/components/chat/thunderbird-settings-dialog.tsx
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
++msgid "Provider settings"
++msgstr "プロバイダー設定"
++
+ #: src/settings/preferences.tsx
+ msgid "Proxying is required in the web app to bypass browser CORS restrictions."
+ msgstr "Web アプリでは、ブラウザーの CORS 制限を回避するためにプロキシが必要です。"
+@@ -4540,6 +4599,7 @@
+ #~ msgstr "最近のプロジェクト"
+
+ #: src/layout/sidebar/chat-list.tsx
++#: src/layout/sidebar/index.tsx
+ #: src/layout/sidebar/recent-chats-menu.tsx
+ msgid "Recents"
+ msgstr ""
+@@ -4817,6 +4877,7 @@
+ msgid "Run this on the machine hosting the bridge, then add it — the connection is verified on first use."
+ msgstr "ブリッジをホストしているマシンでこれを実行してから追加してください — 接続は初回利用時に検証されます。"
+
++#: src/components/chat/thunderbird-api-key.tsx
+ #: src/components/set-node-id-dialog.tsx
+ #: src/components/settings/agents/editable-field.tsx
+ #: src/layout/sidebar/rename-chat-dialog.tsx
+@@ -5183,6 +5244,7 @@
+
+ #: src/layout/sidebar/nav-toggle.tsx
+ #: src/layout/sidebar/settings-sidebar.tsx
++#: src/layout/sidebar/sidebar-header-actions.tsx
+ msgid "Settings"
+ msgstr "設定"
+
+@@ -5543,6 +5605,14 @@
+ msgid "Suggested"
+ msgstr "おすすめ"
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Suggested prompts"
++msgstr "質問の例"
++
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Summarize the unread messages in my inbox and highlight anything that needs a reply."
++msgstr "受信トレイの未読メールを要約し、返信が必要なものを教えてください。"
++
+ #: src/components/context-usage/retained-context-message.tsx
+ msgid "Summary"
+ msgstr ""
+@@ -6246,6 +6316,10 @@
+ #: src/components/onboarding/onboarding-model-step.tsx
+ msgid "Tinfoil"
+ msgstr ""
++
++#: src/components/chat/thunderbird-api-key.tsx
++msgid "Tinfoil API key"
++msgstr "Tinfoil API キー"
+
+ #: src/integrations/tinfoil-search/api.ts
+ msgid "Tinfoil could not retrieve this page."
+@@ -6981,6 +7055,10 @@
+ msgid "word1 word2 word3 ..."
+ msgstr "単語1 単語2 単語3 ..."
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Work with your mail, calendar, and contacts in Thunderbird."
++msgstr "Thunderbird のメール、カレンダー、連絡先を使って作業できます。"
++
+ #: src/settings/preferences.tsx
+ msgid "Would you like to change the language to {suggestedLanguageLabel}?"
+ msgstr "言語を {suggestedLanguageLabel} に変更しますか？"
+@@ -7003,7 +7081,7 @@
+
+ #: src/components/context-usage/retained-context-message.tsx
+ msgid "You"
+-msgstr ""
++msgstr "あなた"
+
+ #: src/components/sign-in/sign-in-otp-step.tsx
+ msgid "You appear to be using a <0>localhost</0> backend. Check your backend server logs for the code or magic link."
+@@ -7202,6 +7280,10 @@
+ msgid "Your encryption was upgraded and a new 24-word recovery phrase was generated. Write it down in order and store it somewhere safe. This phrase won't be shown again."
+ msgstr ""
+
++#: src/components/chat/thunderbird-settings-dialog.tsx
++msgid "Your key is saved in this Thunderbird profile."
++msgstr "キーはこの Thunderbird プロファイルに保存されます。"
++
+ #: src/components/onboarding/onboarding-server-step.tsx
+ msgid "Your local data stays on this device until you enable sync."
+ msgstr ""
+--- a/src/locales/pt-BR/messages.po
++++ b/src/locales/pt-BR/messages.po
+@@ -100,6 +100,10 @@
+ msgid "{appName} will use it across the app. You can change it later in Preferences."
+ msgstr "O {appName} vai usá-lo em todo o app. Você pode alterá-lo depois em Preferências."
+
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
++msgid "{conversation} — Thunderbolt"
++msgstr "{conversation} — Thunderbolt"
++
+ #. js-lingui:icu=%7Bcount%2C+plural%2C+one+%7B%23+chat%7D+other+%7B%23+chats%7D%7D&pluralize_on=count
+ #: src/projects/index.tsx
+ #~ msgid "# chat"
+@@ -353,6 +357,10 @@
+ #: src/components/chat/chat-skills-bar.tsx
+ msgid "Add a skill"
+ msgstr "Adicionar uma habilidade"
++
++#: src/components/chat/thunderbird-settings-dialog.tsx
++msgid "Add a Tinfoil API key to send messages."
++msgstr "Adicione uma chave de API do Tinfoil para enviar mensagens."
+
+ #: src/components/create-item/context.tsx
+ #: src/components/settings/agents/add-custom-agent-form.tsx
+@@ -682,12 +690,16 @@
+ msgstr ""
+
+ #: src/components/chat/chat-prompt-input.tsx
++msgid "Ask about your workspace…"
++msgstr "Pergunte sobre seu espaço de trabalho…"
++
++#: src/components/chat/chat-prompt-input.tsx
+ msgid "Ask me anything…"
+ msgstr "Pergunte o que quiser…"
+
+ #: src/components/context-usage/retained-context-message.tsx
+ msgid "Assistant"
+-msgstr ""
++msgstr "Assistente"
+
+ #: src/components/sync-enable-warning-dialog.tsx
+ msgid "At this time, synced data is not encrypted. Enabling sync will store your data on our servers without encryption. Do you want to continue?"
+@@ -850,6 +862,10 @@
+ msgid "Cannot change agent during reply"
+ msgstr "Não é possível trocar de agente durante uma resposta"
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Catch up on mail"
++msgstr "Revisar meus e-mails"
++
+ #: src/i18n/unit-labels.ts
+ #: src/widgets/weather-forecast/display.tsx
+ msgid "Celsius"
+@@ -888,9 +904,17 @@
+ msgid "Chat actions"
+ msgstr "Ações da conversa"
+
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
++msgid "Chat history"
++msgstr "Histórico de conversas"
++
+ #: src/layout/sidebar/rename-chat-dialog.tsx
+ msgid "Chat name"
+ msgstr "Nome da conversa"
++
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
++msgid "Chat navigation"
++msgstr "Navegação das conversas"
+
+ #: src/providers/chatgpt-registration.ts
+ #~ msgid "ChatGPT account"
+@@ -1080,6 +1104,7 @@
+ msgid "Clear Local Database?"
+ msgstr "Apagar o banco de dados local?"
+
++#: src/components/chat/thunderbird-api-key.tsx
+ #: src/settings/models/edit-model-form.tsx
+ msgid "Clear saved API key"
+ msgstr "Apagar a chave de API salva"
+@@ -1345,6 +1370,10 @@
+ #: src/settings/models/add-provider-models.tsx
+ msgid "Connect this provider on this device to add models."
+ msgstr ""
++
++#: src/components/chat/thunderbird-settings-dialog.tsx
++msgid "Connect Tinfoil"
++msgstr "Conectar ao Tinfoil"
+
+ #: src/components/server-connection/server-connection-form.tsx
+ msgid "Connect to server"
+@@ -2540,6 +2569,10 @@
+ msgid "Downloading…"
+ msgstr "Baixando…"
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Draft a reply"
++msgstr "Escrever uma resposta"
++
+ #: src/layout/sidebar/project-drop-row.tsx
+ msgid "Drop"
+ msgstr "Solte"
+@@ -2725,6 +2758,10 @@
+ msgid "Enter a model ID"
+ msgstr ""
+
++#: src/components/chat/thunderbird-api-key.tsx
++msgid "Enter a replacement API key"
++msgstr "Insira uma nova chave de API"
++
+ #: src/components/otari-connection/use-otari-connection-state.ts
+ msgid "Enter a valid HTTPS server URL, or an HTTP localhost URL for local development."
+ msgstr ""
+@@ -2765,9 +2802,10 @@
+ msgid "Enter this fingerprint on your trusted device before approving."
+ msgstr "Digite esta impressão digital no seu dispositivo confiável antes de aprovar."
+
++#: src/components/chat/thunderbird-api-key.tsx
+ #: src/components/search-provider-setup/search-provider-setup.tsx
+ msgid "Enter your API key"
+-msgstr ""
++msgstr "Digite sua chave de API"
+
+ #: src/components/sign-in-modal.tsx
+ msgid "Enter your code"
+@@ -2910,9 +2948,10 @@
+ msgid "Failed to reset the model."
+ msgstr ""
+
++#: src/components/chat/thunderbird-api-key.tsx
+ #: src/settings/models/use-models-page-state.ts
+ msgid "Failed to save the model."
+-msgstr ""
++msgstr "Não foi possível salvar o modelo."
+
+ #: src/hooks/use-sync-setup.ts
+ #: src/settings/account/use-delete-account.ts
+@@ -3102,6 +3141,10 @@
+ msgid "Help make {appName} better."
+ msgstr ""
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Help me draft a reply to an email. Ask me which message to use."
++msgstr "Ajude-me a escrever uma resposta a um e-mail. Pergunte a qual mensagem quero responder."
++
+ #: src/settings/preferences.tsx
+ msgid "Help us improve the app by sending anonymous usage info such as crashes, performance, and usage. Read more about our <0>privacy policy</0>."
+ msgstr "Ajude a melhorar o app enviando informações de uso anônimas, como falhas, desempenho e uso. Saiba mais na nossa <0>política de privacidade</0>."
+@@ -3443,6 +3486,7 @@
+ msgstr "Carregando a identidade de emparelhamento deste app…"
+
+ #: src/components/chat/chat-ui.tsx
++#: src/components/chat/thunderbird-settings-dialog.tsx
+ #: src/components/device-approval.tsx
+ #: src/components/sidebar-footer.tsx
+ #: src/widgets/connect-integration/widget.tsx
+@@ -3482,6 +3526,10 @@
+ #: src/components/logout-modal.tsx
+ msgid "Logging out…"
+ msgstr "Saindo…"
++
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Look at my calendar and tasks for today. What should I prepare for?"
++msgstr "Confira meu calendário e minhas tarefas de hoje. O que preciso preparar?"
+
+ #: src/components/chat/effort-selector/use-effort-selector-state.ts
+ msgid "Low"
+@@ -3732,6 +3780,7 @@
+ msgid "New Agent"
+ msgstr "Novo agente"
+
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
+ #: src/layout/sidebar/chat-list.tsx
+ #: src/layout/sidebar/recent-chats-menu.tsx
+ #: src/mini-apps/mini-app-chat-history.tsx
+@@ -3803,6 +3852,7 @@
+
+ #: src/layout/sidebar/chat-list.tsx
+ #: src/layout/sidebar/chat-menu-items.tsx
++#: src/layout/sidebar/index.tsx
+ msgid "No chats yet"
+ msgstr "Ainda não há conversas"
+
+@@ -3886,7 +3936,7 @@
+
+ #: src/components/otari-connection/otari-connection.tsx
+ msgid "No models available yet"
+-msgstr ""
++msgstr "Ainda não há modelos disponíveis"
+
+ #: src/settings/models/models-list.tsx
+ msgid "No models configured"
+@@ -4384,6 +4434,10 @@
+ msgid "Pinned skill {label}"
+ msgstr "Habilidade fixada {label}"
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Plan my day"
++msgstr "Planejar meu dia"
++
+ #: src/voice/speakable.ts
+ msgid "Please choose one of the options on screen."
+ msgstr "Escolha uma das opções na tela."
+@@ -4490,6 +4544,11 @@
+ msgid "Provider"
+ msgstr "Provedor"
+
++#: src/components/chat/thunderbird-settings-dialog.tsx
++#: src/components/thunderbird-workspace/thunderbird-workspace.tsx
++msgid "Provider settings"
++msgstr "Configurações do provedor"
++
+ #: src/settings/preferences.tsx
+ msgid "Proxying is required in the web app to bypass browser CORS restrictions."
+ msgstr "No app web, o proxy é necessário para contornar as restrições de CORS do navegador."
+@@ -4564,6 +4623,7 @@
+ #~ msgstr "Projetos recentes"
+
+ #: src/layout/sidebar/chat-list.tsx
++#: src/layout/sidebar/index.tsx
+ #: src/layout/sidebar/recent-chats-menu.tsx
+ msgid "Recents"
+ msgstr ""
+@@ -4841,6 +4901,7 @@
+ msgid "Run this on the machine hosting the bridge, then add it — the connection is verified on first use."
+ msgstr "Execute isto na máquina que hospeda o bridge e depois adicione-o — a conexão é verificada no primeiro uso."
+
++#: src/components/chat/thunderbird-api-key.tsx
+ #: src/components/set-node-id-dialog.tsx
+ #: src/components/settings/agents/editable-field.tsx
+ #: src/layout/sidebar/rename-chat-dialog.tsx
+@@ -5207,6 +5268,7 @@
+
+ #: src/layout/sidebar/nav-toggle.tsx
+ #: src/layout/sidebar/settings-sidebar.tsx
++#: src/layout/sidebar/sidebar-header-actions.tsx
+ msgid "Settings"
+ msgstr "Configurações"
+
+@@ -5567,6 +5629,14 @@
+ msgid "Suggested"
+ msgstr "Sugeridos"
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Suggested prompts"
++msgstr "Sugestões de perguntas"
++
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Summarize the unread messages in my inbox and highlight anything that needs a reply."
++msgstr "Resuma as mensagens não lidas da minha caixa de entrada e destaque as que precisam de resposta."
++
+ #: src/components/context-usage/retained-context-message.tsx
+ msgid "Summary"
+ msgstr ""
+@@ -6270,6 +6340,10 @@
+ #: src/components/onboarding/onboarding-model-step.tsx
+ msgid "Tinfoil"
+ msgstr ""
++
++#: src/components/chat/thunderbird-api-key.tsx
++msgid "Tinfoil API key"
++msgstr "Chave de API do Tinfoil"
+
+ #: src/integrations/tinfoil-search/api.ts
+ msgid "Tinfoil could not retrieve this page."
+@@ -7005,6 +7079,10 @@
+ msgid "word1 word2 word3 ..."
+ msgstr "palavra1 palavra2 palavra3 ..."
+
++#: src/components/thunderbird-workspace/thunderbird-welcome.tsx
++msgid "Work with your mail, calendar, and contacts in Thunderbird."
++msgstr "Trabalhe com seus e-mails, calendário e contatos no Thunderbird."
++
+ #: src/settings/preferences.tsx
+ msgid "Would you like to change the language to {suggestedLanguageLabel}?"
+ msgstr "Você quer mudar o idioma para {suggestedLanguageLabel}?"
+@@ -7027,7 +7105,7 @@
+
+ #: src/components/context-usage/retained-context-message.tsx
+ msgid "You"
+-msgstr ""
++msgstr "Você"
+
+ #: src/components/sign-in/sign-in-otp-step.tsx
+ msgid "You appear to be using a <0>localhost</0> backend. Check your backend server logs for the code or magic link."
+@@ -7226,6 +7304,10 @@
+ msgid "Your encryption was upgraded and a new 24-word recovery phrase was generated. Write it down in order and store it somewhere safe. This phrase won't be shown again."
+ msgstr ""
+
++#: src/components/chat/thunderbird-settings-dialog.tsx
++msgid "Your key is saved in this Thunderbird profile."
++msgstr "Sua chave é salva neste perfil do Thunderbird."
++
+ #: src/components/onboarding/onboarding-server-step.tsx
+ msgid "Your local data stays on this device until you enable sync."
+ msgstr ""
+--- a/src/providers/model-connection.ts
++++ b/src/providers/model-connection.ts
+@@ -8,6 +8,8 @@
+ import type { FetchFn } from '@/lib/proxy-fetch'
+ import type { Model } from '@/types'
+ import { getIdentitySignal } from '@/lib/identity-lifetime'
++import { isThunderbirdPanel } from '@/lib/thunderbird'
++import { assertThunderbirdModel } from './thunderbird-model'
+
+ /** Nonsecret identity of the connection generation captured by an inference transport. */
+ export type ModelProviderBinding = {
+@@ -25,6 +27,9 @@
+   wrapFetch: (fetch: FetchFn) => FetchFn
+   assertCurrent: () => Promise<void>
+ }> => {
++  if (isThunderbirdPanel) {
++    assertThunderbirdModel(model)
++  }
+   const id = model.providerConnectionId
+   if (!id) {
+     return { model, wrapFetch: (fetch) => fetch, assertCurrent: async () => {} }
+--- a/src/vite-env.d.ts
++++ b/src/vite-env.d.ts
+@@ -6,6 +6,7 @@
+
+ // eslint-disable-next-line @typescript-eslint/consistent-type-definitions
+ interface ImportMetaEnv {
++  readonly VITE_THUNDERBIRD_PANEL?: 'true' | 'false'
+   readonly VITE_THUNDERBOLT_CLOUD_URL?: string
+   readonly VITE_THUNDERBOLT_CLOUD_SERVICE_URL?: string
+   readonly VITE_TINFOIL_CLIENT_ID?: string
+--- a/vite.config.ts
++++ b/vite.config.ts
+@@ -16,6 +16,7 @@
+ import { exaRelayPlugin, exaRelayProxies } from './scripts/exa-relay'
+ import { tinfoilSearchRelayPlugin, tinfoilSearchProxy } from './scripts/tinfoil-search-relay'
+ import { copyPowerSyncAssets } from './scripts/copy-powersync-assets'
++import { thunderbirdPanelScripts } from './scripts/thunderbird-panel-build'
+ import {
+   addWebKitCompatToAsset,
+   webkitCompatAssetFileNames,
+@@ -26,6 +27,7 @@
+
+ // More info at: https://storybook.js.org/docs/next/writing-tests/integrations/vitest-addon
+ const host = process.env.TAURI_DEV_HOST
++const isThunderbirdPanel = process.env.VITE_THUNDERBIRD_PANEL === 'true'
+
+ // Import will happen eagerly, but the plugin is only activated when requested.
+
+@@ -63,13 +65,18 @@
+     'import.meta.env.VITE_APP_VERSION': JSON.stringify(pkg.version),
+     // `tauri build --debug` builds production frontend assets for a development app.
+     'import.meta.env.TAURI_ENV_DEBUG': JSON.stringify(process.env.TAURI_ENV_DEBUG === 'true'),
++    'import.meta.env.VITE_THUNDERBIRD_PANEL': JSON.stringify(String(isThunderbirdPanel)),
++    ...(isThunderbirdPanel && {
++      'import.meta.env.VITE_THUNDERBOLT_CLOUD_URL': JSON.stringify(''),
++      'import.meta.env.VITE_SKIP_ONBOARDING': JSON.stringify('true'),
++    }),
+   },
+   build: {
+     sourcemap,
+     rolldownOptions: {
+       input: {
+         app: path.resolve(dirname, 'index.html'),
+-        recovery: path.resolve(dirname, 'webview-recovery.html'),
++        ...(!isThunderbirdPanel && { recovery: path.resolve(dirname, 'webview-recovery.html') }),
+       },
+       external: ['bun:sqlite'],
+       treeshake: {
+@@ -86,6 +93,9 @@
+         ],
+       },
+       output: {
++        // Bundle route, locale, and agent imports into the panel entry. Workers and WASM
++        // still need their own files and are packaged alongside this entry in the XPI.
++        ...(isThunderbirdPanel && { codeSplitting: false }),
+         assetFileNames: webkitCompatAssetFileNames,
+         // Distinct prefix for the entry chunk so size-limit can track the
+         // FCP-blocking bytes separately from on-demand route chunks.
+@@ -94,7 +104,7 @@
+     },
+   },
+   plugins: [
+-    webkitCompatPlugin(),
++    isThunderbirdPanel ? thunderbirdPanelScripts() : webkitCompatPlugin(),
+     tinfoilSearchRelayPlugin(),
+     exaRelayPlugin(),
+     {

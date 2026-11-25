@@ -1745,3 +1745,241 @@ dialog .key-info-block {
     display: none;
   }
 }
+
+/* The embedded editor shares a reading surface with the original message. */
+.reader-compose-details {
+  display: none;
+}
+
+:root[data-reader-compose] {
+  --reply-inset: max(clamp(10px, 3.5vw, 22px), calc((100vw - 720px) / 2));
+
+  & :is(#titlebar, #compose-toolbar-menubar2, #headersSplitter, .writing-tools) {
+    display: none;
+  }
+
+  & #composeContentBox {
+    --compose-gutter: var(--reply-inset);
+    --compose-measure: 100%;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+
+  & #composeContentBox #MsgHeadersToolbar {
+    padding-block: 2px 7px;
+    min-inline-size: 0;
+    max-block-size: 45vh;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    border-block-end: 1px solid var(--desk-line);
+  }
+
+  & #MsgHeadersToolbar #msgSubject {
+    font: 600 1.05rem/1.4 var(--desk-font);
+    letter-spacing: -0.012em;
+    padding-block: 4px;
+  }
+
+  & #subject-box {
+    padding-block-start: 3px;
+    margin-block-start: 3px;
+  }
+
+  & #messageArea {
+    position: relative;
+  }
+
+  & .reader-reply-prompt:not([hidden]) {
+    position: absolute;
+    inset-block-start: 14px;
+    inset-inline-start: var(--reply-inset);
+    pointer-events: none;
+    color: var(--desk-muted);
+    font: 400 1rem/1.55 var(--desk-font);
+  }
+
+  & .address-pill:not(.invalid-address, .key-issue, .editing, [selected]) {
+    padding-inline: 8px;
+    border-radius: 6px;
+    color: var(--desk-ink);
+    background: color-mix(in srgb, var(--desk-ink) 7%, var(--desk-surface));
+  }
+
+  & .pill-indicator {
+    align-self: center;
+    inline-size: 9px;
+    margin: 0;
+    margin-inline-start: 3px;
+    fill: var(--desk-muted);
+    stroke: transparent;
+  }
+
+  & .reader-compose-quote:not([hidden]) {
+    --button-margin: 0;
+    display: flex;
+    align-items: center;
+    align-self: start;
+    gap: 5px;
+    margin: 0 var(--reply-inset) 5px;
+    padding: 3px 5px;
+    border-radius: 5px;
+    color: var(--desk-muted);
+    font: 500 0.82rem/1.3 var(--desk-font);
+
+    &::before {
+      content: "";
+      inline-size: 13px;
+      block-size: 13px;
+      background: currentColor;
+      mask: var(--icon-quote) center / contain no-repeat;
+    }
+  }
+
+  & #messageEditor {
+    margin-block: 8px;
+  }
+
+  & #FormatToolbox {
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  & body > #compose-toolbox {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 2px;
+    padding: 6px var(--reply-inset);
+    border-block-start: 1px solid var(--desk-line);
+    background: var(--desk-surface);
+    min-inline-size: 0;
+
+    appearance: none;
+    background-image: none;
+
+    &::after {
+      display: none;
+      content: none;
+    }
+
+    & > #composeToolbar2 {
+      flex: 1 1 0;
+      min-inline-size: 0;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      appearance: none;
+      background: var(--desk-surface);
+      overflow-x: auto;
+      scrollbar-width: thin;
+    }
+  }
+
+  & #composeFormattingButton {
+    --button-margin: 0;
+    flex: 0 0 auto;
+    inline-size: 30px;
+    min-inline-size: 30px;
+    block-size: 30px;
+    padding: 0;
+    color: var(--desk-muted);
+    font-size: 0;
+    background-image: var(--icon-font);
+    background-position: center;
+    background-size: 16px;
+    background-repeat: no-repeat;
+  }
+
+  & #composeToolbar2 {
+    & toolbarbutton {
+      min-inline-size: 0;
+    }
+
+    & toolbarbutton:not(#button-send) .toolbarbutton-text {
+      display: none;
+    }
+
+    & #button-send {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 6px;
+      padding-inline: 12px;
+      margin: 0;
+      border-radius: 8px;
+      min-block-size: 30px;
+
+      & .toolbarbutton-text {
+        display: inline;
+        margin: 0;
+      }
+    }
+  }
+
+  & #status-bar:has(#statusText:empty):has(#languageStatusButton[hidden]):has(#compose-progressmeter[hidden]) {
+    display: none;
+  }
+}
+
+:root[data-reader-compose="reply"] {
+  & #composeContentBox #MsgHeadersToolbar {
+    grid-template-columns: 0 fit-content(6rem) minmax(0, 1fr) auto;
+    grid-template-rows: auto auto auto;
+  }
+
+  & .reader-compose-details {
+    --button-margin: 0;
+    display: inline-flex;
+    align-items: center;
+    align-self: start;
+    grid-row: 1;
+    grid-column: 4;
+    margin-block-start: 1px;
+    padding: 3px 6px;
+    gap: 4px;
+    font: 550 0.85rem/1.4 var(--desk-font);
+    color: var(--desk-muted);
+    border-radius: 6px;
+
+    &::after {
+      content: "";
+      inline-size: 11px;
+      block-size: 11px;
+      background-color: currentColor;
+      mask: var(--icon-nav-down-xs) center / contain no-repeat;
+    }
+
+    &[aria-expanded="true"]::after {
+      rotate: 180deg;
+    }
+  }
+
+  & #recipientsContainer {
+    grid-column: 1 / 4;
+    grid-row: 1;
+  }
+
+  & #MsgHeadersToolbar:has(.reader-compose-details[aria-expanded="false"])
+    :is(#top-gradient-box, #subject-box) {
+    /* The native subject input needs a layout frame for its editor. */
+    position: absolute;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  & #MsgHeadersToolbar:has(.reader-compose-details[aria-expanded="true"]) {
+    & #top-gradient-box {
+      grid-row: 1;
+      grid-column: 1 / 4;
+    }
+
+    & #recipientsContainer {
+      grid-row: 2;
+    }
+
+    & #subject-box {
+      grid-row: 3;
+    }
+  }
+}

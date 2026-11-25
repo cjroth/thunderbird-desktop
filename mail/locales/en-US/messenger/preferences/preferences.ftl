@@ -1617,3 +1617,6 @@ apply-changes-prompt-folder-children-message = Apply the current threading and s
 apply-current-view-error = Unable to apply current view settings
 
 apply-current-view-success = Current view settings applied successfully
+
+compose-in-reader =
+    .label = Write new messages and replies in the message pane

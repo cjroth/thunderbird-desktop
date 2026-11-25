@@ -11,6 +11,12 @@ const { XPCOMUtils } = ChromeUtils.importESModule(
 const { MailE10SUtils } = ChromeUtils.importESModule(
   "resource:///modules/MailE10SUtils.sys.mjs"
 );
+const { MailServices } = ChromeUtils.importESModule(
+  "resource:///modules/MailServices.sys.mjs"
+);
+const { ShortcutUtils } = ChromeUtils.importESModule(
+  "resource://gre/modules/ShortcutUtils.sys.mjs"
+);
 // eslint-disable-next-line import-x/no-unassigned-import
 import "chrome://messenger/content/lazy-findbar.mjs";
 
@@ -133,6 +139,152 @@ class MessagePane extends HTMLElement {
    */
   #keepStartPageOpen = false;
 
+  /** Show the draft selected in the folder, or the last reply opened for this message. */
+  #showComposer(uri, target) {
+    const cards = this.querySelectorAll(".reader-compose");
+    if (target === undefined) {
+      target = Array.from(cards).find(
+        card =>
+          (uri &&
+            card.querySelector("browser").contentWindow.gMsgCompose?.compFields
+              .draftId === uri) ||
+          (card.dataset.uri === uri && card.hasAttribute("data-current"))
+      );
+    }
+    for (const card of cards) {
+      card.inert = card !== target;
+      if (card === target) {
+        card.classList.toggle(
+          "compose-solo",
+          !card.dataset.uri || card.dataset.uri !== uri
+        );
+      }
+    }
+  }
+
+  focusOpenDraft(uri) {
+    const card = Array.from(this.querySelectorAll(".reader-compose")).find(
+      item =>
+        item.querySelector("browser").contentWindow.gMsgCompose?.compFields
+          .draftId === uri
+    );
+    if (!card) {
+      return false;
+    }
+    const hdr = MailServices.messageServiceFromURI(uri).messageURIToMsgHdr(uri);
+    window.selectMessage(hdr);
+    this.#showComposer(uri, card);
+    card.querySelector("browser").focus();
+    return true;
+  }
+
+  canCloseEditors() {
+    return Array.from(this.querySelectorAll(".reader-compose browser")).every(
+      frame => frame.contentWindow.ComposeCanClose?.() !== false
+    );
+  }
+
+  openComposer(params) {
+    const uri = params.originalMsgURI || "";
+    // A sender-only reply and a reply-all can have very different recipients.
+    // Each mode/format keeps its own draft and editing history.
+    const mode = `${params.type}/${params.format}`;
+    const siblings = Array.from(
+      this.querySelectorAll(".reader-compose")
+    ).filter(card => card.dataset.uri === uri);
+    const existing = siblings.find(card => card.dataset.mode === mode);
+    for (const card of siblings) {
+      card.toggleAttribute("data-current", card === existing);
+    }
+    this.#showComposer(uri, existing || null);
+    if (existing) {
+      existing.querySelector("browser").focus();
+      return;
+    }
+
+    const card = document.createElement("section");
+    card.className = "reader-compose";
+    card.dataset.uri = uri;
+    card.dataset.mode = mode;
+    card.toggleAttribute("data-current", true);
+    card.classList.toggle("compose-solo", !uri);
+    const header = document.createElement("header");
+    const title = document.createElement("strong");
+    document.l10n.setAttributes(
+      title,
+      uri ? "reader-compose-reply" : "reader-compose-new"
+    );
+    const close = document.createElement("button");
+    close.className = "icon-button icon-only reader-compose-close";
+    document.l10n.setAttributes(close, "reader-compose-close");
+    header.append(title);
+    if (uri) {
+      const expand = document.createElement("button");
+      expand.className = "icon-button icon-only reader-compose-expand";
+      document.l10n.setAttributes(expand, "reader-compose-expand");
+      expand.addEventListener("click", () => {
+        const expanded = card.classList.toggle("compose-expanded");
+        document.l10n.setAttributes(
+          expand,
+          expanded ? "reader-compose-restore" : "reader-compose-expand"
+        );
+      });
+      header.append(expand);
+    }
+    header.append(close);
+    const frame = document.createXULElement("browser");
+    frame.setAttribute("type", "content");
+    const source =
+      "chrome://messenger/content/messengercompose/messengercompose.xhtml";
+    const initialize = event => {
+      if (
+        event.target !== frame.contentDocument ||
+        event.target.documentURI !== source
+      ) {
+        return;
+      }
+      frame.removeEventListener("DOMDocElementInserted", initialize, true);
+      const editor = frame.contentWindow;
+      editor.arguments = [params];
+      editor.document.documentElement.setAttribute(
+        "data-reader-compose",
+        uri ? "reply" : "new"
+      );
+      editor.addEventListener("reader-compose-finished", event => {
+        if (event.target === editor) {
+          const wasVisible = !card.inert;
+          card.remove();
+          if (card.hasAttribute("data-current")) {
+            const previous = Array.from(
+              this.querySelectorAll(".reader-compose")
+            ).findLast(item => item.dataset.uri === uri);
+            if (previous) {
+              previous.toggleAttribute("data-current", true);
+              if (wasVisible) {
+                this.#showComposer(uri, previous);
+                previous.querySelector("browser").focus();
+                return;
+              }
+            }
+          }
+          if (wasVisible) {
+            const entry = this.querySelector(
+              ".reader-reply-entry:not([hidden]) button"
+            );
+            (entry || window.threadTree)?.focus();
+          }
+        }
+      });
+    };
+    frame.addEventListener("DOMDocElementInserted", initialize, true);
+    close.addEventListener("click", () =>
+      frame.contentWindow.goDoCommand("cmd_close")
+    );
+    frame.setAttribute("src", source);
+    card.append(header, frame);
+    this.append(card);
+  }
+
   connectedCallback() {
     if (this.hasConnected) {
       return;
@@ -150,6 +302,45 @@ class MessagePane extends HTMLElement {
     this.webBrowser = this.querySelector("#webBrowser");
     this.messageBrowser = this.querySelector("#messageBrowser");
     this.multiMessageBrowser = this.querySelector("#multiMessageBrowser");
+    const entry = this.querySelector(".reader-reply-entry");
+    const key = window.top.document.getElementById("key_reply");
+    if (key) {
+      entry.querySelector("kbd").textContent =
+        ShortcutUtils.prettifyShortcut(key);
+    }
+    entry.querySelector("button").addEventListener("click", event => {
+      window.commandController.doCommand("cmd_reply", event);
+    });
+    this.messageBrowser.addEventListener("MsgLoaded", () => {
+      const message = this.messageBrowser.contentWindow.gMessage;
+      const excluded =
+        Ci.nsMsgFolderFlags.Drafts |
+        Ci.nsMsgFolderFlags.Templates |
+        Ci.nsMsgFolderFlags.Queue;
+      entry.hidden =
+        !message ||
+        message.folder?.isSpecialFolder(excluded, true) ||
+        ["rss", "nntp"].includes(message.folder?.server.type) ||
+        !window.commandController.isCommandEnabled("cmd_reply");
+      if (entry.hidden) {
+        return;
+      }
+      const address = MailServices.headerParser.parseEncodedHeader(
+        message.getStringProperty("replyTo") || message.author
+      )[0];
+      const ownMessage = MailServices.accounts.allIdentities.some(
+        identity =>
+          identity.email?.toLowerCase() === address?.email?.toLowerCase()
+      );
+      const label = entry.querySelector(".reader-reply-label");
+      if (address?.name && !ownMessage) {
+        document.l10n.setAttributes(label, "reader-reply-to-sender", {
+          sender: address.name,
+        });
+      } else {
+        document.l10n.setAttributes(label, "reader-write-reply");
+      }
+    });
   }
 
   /**
@@ -295,6 +486,8 @@ class MessagePane extends HTMLElement {
    * Ensure the message browser is not displaying a message.
    */
   #clearMessage() {
+    this.querySelector(".reader-reply-entry").hidden = true;
+    this.#showComposer(null);
     if (this.conversationView) {
       this.conversationView.hidden = true;
       this.conversationView.clear();
@@ -335,6 +528,8 @@ class MessagePane extends HTMLElement {
     this.clearWebPage();
     this.#clearMessages();
 
+    this.querySelector(".reader-reply-entry").hidden = true;
+    this.#showComposer(messageURI);
     this.messageBrowser.contentWindow.displayMessage(messageURI, gViewWrapper);
     this.messageBrowser.hidden = false;
   }

@@ -72,6 +72,67 @@ async function ComposeMessage(
     document.getElementById("messageBrowser")?.contentWindow;
   const currentHeaderData = aboutMessage?.currentHeaderData;
 
+  const reader = document.getElementById("tabmail")?.currentAbout3Pane;
+  function openComposer(hdr, uri, sender, from = null) {
+    const types = Ci.nsIMsgCompType;
+    const canEmbed =
+      type == types.New ||
+      (messageArray?.length == 1 &&
+        [
+          types.Reply,
+          types.ReplyAll,
+          types.ReplyToSender,
+          types.ReplyToList,
+          types.ReplyToSenderAndGroup,
+          types.ReplyToGroup,
+        ].includes(type));
+    const identity =
+      sender ||
+      MailServices.accounts.defaultAccount?.defaultIdentity ||
+      MailServices.accounts.allIdentities[0];
+    if (
+      !canEmbed ||
+      !identity ||
+      !reader?.messagePane ||
+      (hdr && reader.gDBView?.hdrForFirstSelectedMessage !== hdr) ||
+      reader.document.body.classList.contains("account-central") ||
+      !Services.prefs.getBoolPref("mail.compose.inReader", true)
+    ) {
+      return MailServices.compose.OpenComposeWindow(
+        null,
+        hdr,
+        uri,
+        type,
+        format,
+        sender,
+        from,
+        true,
+        selection,
+        autodetectCharset
+      );
+    }
+    const params = Cc[
+      "@mozilla.org/messengercompose/composeparams;1"
+    ].createInstance(Ci.nsIMsgComposeParams);
+    params.type = type;
+    params.format = format;
+    params.identity = identity;
+    params.autodetectCharset = autodetectCharset;
+    params.composeFields = Cc[
+      "@mozilla.org/messengercompose/composefields;1"
+    ].createInstance(Ci.nsIMsgCompFields);
+    if (hdr) {
+      params.origMsgHdr = hdr;
+      params.originalMsgURI = uri;
+      params.composeFields.from = from || "";
+      if (selection) {
+        params.htmlToQuote = selection;
+      }
+    }
+    reader.paneLayout.messagePaneVisible = true;
+    reader.messagePane.openComposer(params);
+  }
+
   function isCurrentlyDisplayed(hdr) {
     return (
       currentHeaderData && // ignoring enclosing brackets:
@@ -122,8 +183,23 @@ async function ComposeMessage(
     msgKey = GetMsgKeyFromURI(messageArray[0]);
   }
 
-  // Check if the draft is already open in another window. If it is, just focus the window.
+  // Resume an editor already displaying this draft, including parked readers.
   if (type == Ci.nsIMsgCompType.Draft && messageArray.length == 1) {
+    for (const win of Services.wm.getEnumerator("mail:3pane")) {
+      const tabmail = win.document.getElementById("tabmail");
+      for (const tab of tabmail.tabInfo) {
+        if (tab.mode.name != "mail3PaneTab") {
+          continue;
+        }
+        const pane = tab.chromeBrowser.contentWindow;
+        if (pane.messagePane?.focusOpenDraft(messageArray[0])) {
+          tabmail.switchToTab(tab);
+          pane.paneLayout.messagePaneVisible = true;
+          win.focus();
+          return;
+        }
+      }
+    }
     // We'll search this uri in the opened windows.
     for (const win of Services.wm.getEnumerator("")) {
       // Check if it is a compose window.
@@ -178,16 +254,7 @@ async function ComposeMessage(
     case Ci.nsIMsgCompType.New: // new message
       // dump("OpenComposeWindow with " + identity + "\n");
 
-      MailServices.compose.OpenComposeWindow(
-        null,
-        null,
-        null,
-        type,
-        format,
-        identity,
-        null,
-        true
-      );
+      openComposer(null, null, identity);
       return;
     case Ci.nsIMsgCompType.NewsPost:
       // dump("OpenComposeWindow with " + identity + " and " + newsgroup + "\n");
@@ -402,17 +469,11 @@ async function ComposeMessage(
                 }
 
                 // Now open compose window and use matching hint as reply sender.
-                MailServices.compose.OpenComposeWindow(
-                  null,
+                openComposer(
                   msgHdr,
                   messageUri,
-                  type,
-                  format,
                   hdrIdentity,
-                  matchingHint.toString(),
-                  true,
-                  selection,
-                  autodetectCharset
+                  matchingHint.toString()
                 );
               },
               true,
@@ -439,18 +500,7 @@ async function ComposeMessage(
                 findDeliveredToIdentityEmail(hdr)
               );
             }
-            MailServices.compose.OpenComposeWindow(
-              null,
-              hdr,
-              messageUri,
-              type,
-              format,
-              bestIdentity,
-              null,
-              true,
-              selection,
-              autodetectCharset
-            );
+            openComposer(hdr, messageUri, bestIdentity, null);
           }
         }
       }

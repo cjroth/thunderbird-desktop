@@ -36,6 +36,9 @@ var gSpacesToolbar = {
    * @type {boolean}
    */
   isHidden: false,
+  placement: "top",
+  lastVisiblePlacement: "top",
+  placementPref: "mail.spacesToolbar.placement",
   /**
    * If the spaces toolbar is currently being customized.
    *
@@ -299,10 +302,15 @@ var gSpacesToolbar = {
     ];
 
     this.setupEventListeners();
-    this.toggleToolbar(
-      Services.xulStore.getValue(this.docURL, "spacesToolbar", "hidden") ==
-        "true"
-    );
+    if (
+      !Services.prefs.prefHasUserValue(this.placementPref) &&
+      Services.xulStore.getValue(this.docURL, "spacesToolbar", "hidden") == "true"
+    ) {
+      this.setPlacement("dropdown");
+    }
+    Services.xulStore.removeValue(this.docURL, "spacesToolbar", "hidden");
+    Services.prefs.addObserver(this.placementPref, this._onPlacementChanged);
+    this._onPlacementChanged();
 
     // The tab monitor will inform us when a different tab is selected.
     tabmail.registerTabMonitor(this.tabMonitor);
@@ -319,9 +327,10 @@ var gSpacesToolbar = {
   },
 
   setupEventListeners() {
-    this.element.addEventListener("contextmenu", event =>
-      this._showContextMenu(event)
-    );
+    const updateButtonCapacity = () => this.updateAddonButtonsUI();
+    window.addEventListener("uidensitychange", updateButtonCapacity);
+    window.addEventListener("uifontsizechange", updateButtonCapacity);
+
     this.element.addEventListener("keydown", event => {
       this._onSpacesToolbarKeyDown(event);
     });
@@ -371,64 +380,83 @@ var gSpacesToolbar = {
       space.menuitem?.addEventListener("command", () => {
         this.openSpace(tabmail, space);
       });
-      if (space.name == "settings") {
-        space.button.addEventListener("contextmenu", event => {
-          event.stopPropagation();
-          settingsContextMenu.openPopupAtScreen(
-            event.screenX,
-            event.screenY,
-            true,
-            event
-          );
-        });
-        continue;
+    }
+
+    // Extension buttons can arrive after the window opens.
+    this.element.addEventListener("contextmenu", event => {
+      const button = event.target.closest(".spaces-toolbar-button");
+      const space = this.spaces.find(candidate => candidate.button == button);
+      if (!space) {
+        this._showContextMenu(event);
+        return;
       }
-      space.button.addEventListener("contextmenu", event => {
-        event.stopPropagation();
-        contextSpace = space;
-        // Clean up old items.
-        for (const menuitem of contextMenu.querySelectorAll(".switch-to-tab")) {
-          menuitem.remove();
-        }
 
-        const existingTabs = tabmail.tabInfo.filter(space.tabInSpace);
-        // Show opening in new tab if no existing tabs or can open multiple.
-        // NOTE: We always show at least one item: either the switch to tab
-        // items, or the new tab item.
-        newTabItem.hidden = !!existingTabs.length && !space.allowMultipleTabs;
-        newWindowItem.hidden = !space.allowMultipleTabs;
-
-        for (const tabInfo of existingTabs) {
-          const menuitem = document.createXULElement("menuitem");
-          document.l10n.setAttributes(
-            menuitem,
-            "spaces-context-switch-tab-item",
-            { tabName: tabInfo.title }
-          );
-          menuitem.classList.add("switch-to-tab", "menuitem-iconic");
-          menuitem.addEventListener("command", () =>
-            tabmail.switchToTab(tabInfo)
-          );
-          contextMenu.appendChild(menuitem);
-        }
-        // The separator splits the "Open in new tab" and "Open in new window"
-        // items from the switch-to-tab items. Only show separator if there
-        // are non-hidden items on both sides.
-        separator.hidden = !existingTabs.length || !space.allowMultipleTabs;
-
-        contextMenu.openPopupAtScreen(
+      event.stopPropagation();
+      if (space.name == "settings") {
+        settingsContextMenu.openPopupAtScreen(
           event.screenX,
           event.screenY,
           true,
           event
         );
+        return;
+      }
+
+      contextSpace = space;
+      for (const menuitem of contextMenu.querySelectorAll(".switch-to-tab")) {
+        menuitem.remove();
+      }
+
+      const existingTabs = tabmail.tabInfo.filter(tab => space.tabInSpace(tab));
+      newTabItem.hidden = !!existingTabs.length && !space.allowMultipleTabs;
+      newWindowItem.hidden = !space.allowMultipleTabs || space.isExtensionSpace;
+      for (const tab of existingTabs) {
+        const menuitem = document.createXULElement("menuitem");
+        document.l10n.setAttributes(menuitem, "spaces-context-switch-tab-item", {
+          tabName: tab.title,
+        });
+        menuitem.classList.add("switch-to-tab", "menuitem-iconic");
+        menuitem.addEventListener("command", () => tabmail.switchToTab(tab));
+        contextMenu.appendChild(menuitem);
+      }
+      separator.hidden =
+        !existingTabs.length || (newTabItem.hidden && newWindowItem.hidden);
+      contextMenu.openPopupAtScreen(event.screenX, event.screenY, true, event);
+    });
+
+    const placementButton = document.getElementById("spacesPlacementButton");
+    const placementPopup = document.getElementById("spacesToolbarContextMenu");
+    this._addButtonClickListener(placementButton, () => {
+      placementPopup.openPopup(placementButton, "after_start");
+    });
+    placementPopup.addEventListener("popupshown", () => {
+      placementButton.setAttribute("aria-expanded", "true");
+    });
+    placementPopup.addEventListener("popuphidden", () => {
+      placementButton.setAttribute("aria-expanded", "false");
+    });
+    for (const menu of document.querySelectorAll(".spaces-placement-menu")) {
+      const items = ["top", "left", "dropdown"].map(placement => {
+        const item = document.createXULElement("menuitem");
+        item.setAttribute("type", "radio");
+        item.setAttribute("name", "spaces-placement");
+        item.setAttribute("data-placement", placement);
+        document.l10n.setAttributes(item, `spaces-placement-${placement}`);
+        item.addEventListener("command", () => this.setPlacement(placement));
+        return item;
+      });
+      menu.prepend(...items);
+      menu.addEventListener("popupshowing", () => {
+        for (const item of items) {
+          if (item.dataset.placement == this.placement) {
+            item.setAttribute("checked", "true");
+          } else {
+            item.removeAttribute("checked");
+          }
+          item.disabled = Services.prefs.prefIsLocked(this.placementPref);
+        }
       });
     }
-
-    this._addButtonClickListener(
-      document.getElementById("collapseButton"),
-      () => this.toggleToolbar(true)
-    );
 
     document
       .getElementById("spacesPopupButtonReveal")
@@ -695,7 +723,7 @@ var gSpacesToolbar = {
     // listen for the Escape keypress to maintain that usability exit point.
     window.addEventListener("keypress", this.onWindowKeypress);
     this.customizePanel.openPopup(
-      document.getElementById("collapseButton"),
+      document.getElementById("spacesPlacementButton"),
       "after_start",
       0,
       0,
@@ -827,17 +855,43 @@ var gSpacesToolbar = {
    * @param {boolean} isHidden - The visibility state to update the elements.
    */
   toggleToolbar(isHidden) {
-    // Prevent the visibility change state of the spaces toolbar if we're
-    // currently customizing it, in order to avoid weird positioning outcomes
-    // with the customize popup panel.
-    if (this.isCustomizing) {
-      return;
+    this.setPlacement(isHidden ? "dropdown" : this.lastVisiblePlacement);
+  },
+
+  /** Switch all mail windows to the selected Spaces presentation. */
+  setPlacement(placement) {
+    if (!this.isCustomizing && !Services.prefs.prefIsLocked(this.placementPref)) {
+      Services.prefs.setStringPref(this.placementPref, placement);
     }
+  },
 
-    this.isHidden = isHidden;
+  _onPlacementChanged() {
+    gSpacesToolbar._applyPlacement(
+      Services.prefs.getStringPref(gSpacesToolbar.placementPref, "top")
+    );
+  },
 
-    // The focused element, prior to toggling.
+  _applyPlacement(value) {
+    const placement = ["top", "left", "dropdown"].includes(value) ? value : "top";
     const activeElement = document.activeElement;
+    const hadFocus = this.element.contains(activeElement);
+    const isHidden = placement == "dropdown";
+    this.placement = placement;
+    this.isHidden = isHidden;
+    if (!isHidden) {
+      this.lastVisiblePlacement = placement;
+    }
+    document.documentElement.setAttribute("spaces-placement", placement);
+    this.element.setAttribute(
+      "aria-orientation",
+      placement == "left" ? "vertical" : "horizontal"
+    );
+    const anchor = document.getElementById(
+      placement == "left" ? "messengerBody" : "unifiedToolbar"
+    );
+    if (anchor && this.element.nextElementSibling != anchor) {
+      anchor.before(this.element);
+    }
 
     const pinnedButton = document.getElementById("spacesPinnedButton");
     pinnedButton.hidden = !isHidden;
@@ -849,14 +903,14 @@ var gSpacesToolbar = {
       tabs.updateToolbarVisibility();
     }
 
-    if (isHidden && this.element.contains(activeElement)) {
+    if (isHidden && hadFocus) {
       // If the toolbar is being hidden and one of its child element was
       // focused, move the focus to the pinned button without changing the
       // focusButton attribute of this object.
       pinnedButton.focus();
     } else if (
       !isHidden &&
-      (activeElement == pinnedButton || activeElement == revealButton)
+      (activeElement == pinnedButton || activeElement == revealButton || hadFocus)
     ) {
       // If the the toolbar is being shown and the focus is on the pinned or
       // reveal button, move the focus to the previously focused button.
@@ -935,10 +989,30 @@ var gSpacesToolbar = {
     separator.collapsed = false;
     const container = document.getElementById("spacesToolbarAddonsContainer");
     const buttons = [...container.querySelectorAll(".spaces-addon-button")];
-    const slots = parseInt(
-      getComputedStyle(container).getPropertyValue("--spaces-addon-slots"),
-      10
-    );
+    let slots;
+    if (this.placement == "left") {
+      const styles = getComputedStyle(this.element);
+      const top = this.element.querySelector(".spaces-toolbar-top-container");
+      const bottom = this.element.querySelector(".spaces-toolbar-bottom-container");
+      const height = top.querySelector("button").getBoundingClientRect().height;
+      const buttonGap = parseFloat(getComputedStyle(container).rowGap);
+      const groupGap = parseFloat(styles.rowGap);
+      const available =
+        this.element.clientHeight - top.clientHeight - bottom.clientHeight -
+        parseFloat(styles.paddingTop) - parseFloat(styles.paddingBottom) -
+        2 * groupGap;
+      const capacity = room => Math.max(0, Math.floor((room + buttonGap) / (height + buttonGap)));
+      slots = capacity(available);
+      if (buttons.length > slots) {
+        // The overflow button is a sibling of the add-on button group.
+        slots = capacity(available - height - groupGap);
+      }
+    } else {
+      // A single extension icon takes the same space as an overflow button.
+      slots = buttons.length == 1 ? 1 : parseInt(
+        getComputedStyle(container).getPropertyValue("--spaces-addon-slots"), 10
+      );
+    }
     const overflowing = buttons.length > slots;
     overflowButton.hidden = !overflowing;
     if (!overflowing) {
@@ -973,6 +1047,24 @@ var gSpacesToolbar = {
    * @property {?string} badgeText - The optional badge text.
    * @property {?Map} badgeStyles - The optional badge styles Map.
    */
+
+  /**
+   * Whether this tab shows a page belonging to the extension that owns its space.
+   *
+   * @param {object} tab - The content tab.
+   * @param {nsIURI} uri - Its current top-level location.
+   * @returns {boolean} Whether the space itself provides the page.
+   */
+  isExtensionSpacePage(tab, uri) {
+    if (!uri.schemeIs("moz-extension")) {
+      return false;
+    }
+    const id = this.getSpaceButtonIdForTab(tab);
+    const owner = this.spaces?.find(
+      space => space.isExtensionSpace && space.name == id
+    );
+    return owner?.tabProperties.triggeringPrincipal?.originNoSuffix == uri.prePath;
+  },
 
   /**
    * Helper function for extensions in order to add buttons to the spaces
@@ -1025,6 +1117,11 @@ var gSpacesToolbar = {
       const img = document.createElement("img");
       img.setAttribute("alt", "");
       button.appendChild(img);
+
+      const label = document.createElement("span");
+      label.classList.add("space-label");
+      label.textContent = nativeButtonProperties.title;
+      button.appendChild(label);
       document
         .getElementById("spacesToolbarAddonsContainer")
         .appendChild(button);
@@ -1067,6 +1164,7 @@ var gSpacesToolbar = {
         menuitem,
         tabProperties,
         isExtensionSpace: true,
+        allowMultipleTabs: true,
         tabInSpace(tabInfo) {
           return gSpacesToolbar.getSpaceButtonIdForTab(tabInfo) == this.name
             ? 1
@@ -1083,11 +1181,9 @@ var gSpacesToolbar = {
             where
           );
           gSpacesToolbar.setSpaceButtonIdForTab(tab, this.name);
-          // TODO: Make sure the spaceButtonId is set during load, and not here,
-          // where it might be too late.
-          gSpacesToolbar.currentSpace = this;
-          button.setAttribute("aria-current", "page");
-          button.classList.add("current");
+          // TabSelect fires before the new content tab has its space ID.
+          tab.progressListener.updateNavigationToolbar(tab.browser.currentURI);
+          gSpacesToolbar.tabMonitor.onTabSwitched(tab);
           return tab;
         },
       });
@@ -1121,6 +1217,18 @@ var gSpacesToolbar = {
       }
 
       this.updateAddonButtonsUI();
+      // Registration can follow session restore, including background tabs.
+      for (const tab of tabmail.tabInfo) {
+        if (this.getSpaceButtonIdForTab(tab) == id) {
+          tab.progressListener.updateNavigationToolbar(tab.browser.currentURI);
+        }
+      }
+      if (
+        tabmail.currentTabInfo &&
+        this.getSpaceButtonIdForTab(tabmail.currentTabInfo) == id
+      ) {
+        this.tabMonitor.onTabSwitched(tabmail.currentTabInfo);
+      }
       return resolve();
     });
   },
@@ -1164,6 +1272,8 @@ var gSpacesToolbar = {
       }
 
       button.title = nativeButtonProperties.title;
+      button.querySelector(".space-label").textContent =
+        nativeButtonProperties.title;
       menuitem.label = nativeButtonProperties.title;
 
       // Update icons.
@@ -1235,11 +1345,10 @@ var gSpacesToolbar = {
 
       const space = gSpacesToolbar.spaces.find(s => s.name == id);
       const tabmail = document.getElementById("tabmail");
-      const existing = tabmail.tabInfo.find(
-        tabInfo => space.tabInSpace(tabInfo) == 1
-      );
-      if (existing) {
-        tabmail.closeTab(existing);
+      for (const tab of tabmail.tabInfo.filter(tabInfo =>
+        space.tabInSpace(tabInfo)
+      )) {
+        tabmail.closeTab(tab);
       }
 
       gSpacesToolbar.spaces = gSpacesToolbar.spaces.filter(e => e.name != id);
@@ -1301,16 +1410,10 @@ var gSpacesToolbar = {
     spacesPinnedButton.classList.toggle("has-badge", hasBadge);
   },
 
-  /**
-   * Save the preferred state when the app is closed.
-   */
   onUnload() {
-    Services.xulStore.setValue(
-      this.docURL,
-      "spacesToolbar",
-      "hidden",
-      this.isHidden
-    );
+    if (this.isLoaded) {
+      Services.prefs.removeObserver(this.placementPref, this._onPlacementChanged);
+    }
   },
 };
 
